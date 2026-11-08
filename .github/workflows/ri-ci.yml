@@ -61,6 +61,7 @@ jobs:
           ri-probe --help
           ri-catalog --help
           ri-extract --help
+          ri-analyze --help
 
   package-workbench:
     name: Package offline web workbench
