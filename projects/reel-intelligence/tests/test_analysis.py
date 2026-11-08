@@ -195,3 +195,33 @@ def test_analyze_media_never_overwrites_existing_output(tmp_path):
         analyze_media(make_png(tmp_path), output)
 
     assert marker.read_text(encoding="utf-8") == "keep"
+
+
+def test_ocr_page_locator_preserves_relative_path_page_number_and_hash(tmp_path):
+    asset = make_asset(tmp_path)
+    digest = "a" * 64
+    bundle = build_analysis_bundle(
+        asset,
+        ocr_observations=[{
+            "path": "pdf-pages/page-2.png",
+            "page": 2,
+            "timestamp_ms": 0,
+            "text": "Page two",
+            "modality": "document",
+            "content_hash": digest,
+        }],
+    )
+    evidence = next(item for item in bundle["records"] if item["record_type"] == "evidence")
+
+    assert evidence["modality"] == "document"
+    assert evidence["locator"]["page"] == 2
+    assert evidence["locator"]["path"] == "pdf-pages/page-2.png"
+    assert evidence["content_hash"] == digest
+
+
+def test_warning_without_any_evidence_marks_analysis_failed(tmp_path):
+    asset = make_asset(tmp_path)
+    bundle = build_analysis_bundle(asset, warnings=["ASR executable unavailable"])
+    manifest = bundle["manifest"]
+
+    assert manifest["status"] == "failed"
