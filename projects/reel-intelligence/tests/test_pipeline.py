@@ -133,7 +133,7 @@ pathlib.Path(sys.argv[-1] + "-1.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x0
 
     evidence = [item for item in result["records"] if item["record_type"] == "evidence"]
     assert result["manifest"]["status"] == "completed"
-    assert any(item["modality"] == "image" for item in evidence)
+    assert any(item["modality"] == "document" and item.get("content_hash") for item in evidence)
     assert (output / "pdf-pages" / "page-1.png").is_file()
 
 
@@ -165,3 +165,42 @@ def test_pipeline_reports_missing_optional_tools_as_partial_result(tmp_path):
     assert result["manifest"]["status"] == "failed"
     assert result["manifest"]["warnings"]
     assert (output / "run_manifest.json").is_file()
+
+
+
+def test_pdf_selectable_text_is_extracted_even_when_ocr_is_disabled(tmp_path):
+    pdf = make_pdf(tmp_path)
+    pdftotext = executable(tmp_path, "pdftotext-text", """#!/usr/bin/env python3
+print("متن لایه متنی PDF\\f")
+""")
+    output = tmp_path / "runs" / "pdf-text-only"
+
+    result = run_local_analysis(
+        pdf,
+        output,
+        pdftotext_path=pdftotext,
+        enable_ocr=False,
+        enable_scene_detection=False,
+    )
+
+    evidence = [item for item in result["records"] if item["record_type"] == "evidence"]
+    assert result["manifest"]["status"] == "completed"
+    assert any(item["observation"] == "متن لایه متنی PDF" for item in evidence)
+    assert result["processor_status"]["ocr"] == "disabled"
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, 1.5])
+def test_pipeline_rejects_invalid_video_ocr_frame_limit(tmp_path, limit):
+    image = make_image(tmp_path)
+    output = tmp_path / f"invalid-ocr-limit-{str(limit)}"
+
+    with pytest.raises(PipelineError, match="max_ocr_frames"):
+        run_local_analysis(
+            image,
+            output,
+            enable_ocr=False,
+            enable_scene_detection=False,
+            max_ocr_frames=limit,
+        )
+
+    assert not output.exists()
