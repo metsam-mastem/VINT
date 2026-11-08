@@ -36,8 +36,8 @@ print(json.dumps({
     result = probe_media(media, ffprobe_path=fake)
 
     assert result["asset"]["filename"] == "clip.mp4"
-    assert result["probe"]["duration_seconds"] == 12.5
-    assert result["probe"]["size_bytes"] == 4096
+    assert result["probe"]["format"]["duration_seconds"] == 12.5
+    assert result["probe"]["format"]["size_bytes"] == 4096
     assert result["probe"]["streams"][0]["codec_name"] == "h264"
     assert "tags" not in result["probe"]["format"]
 
