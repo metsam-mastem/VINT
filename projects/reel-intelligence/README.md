@@ -83,7 +83,7 @@ GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and checks both CLI
 ## Not implemented yet
 
 - ZIP/archive inspection and safe extraction.
-- FFmpeg/ffprobe metadata extraction or full media decoding.
+- Full media decoding, transcoding, and frame/audio extraction.
 - Speech recognition, OCR, scene detection, or multimodal inference.
 - Database persistence, search/indexing, UI, API, cloud sync, or platform adapters.
 - Android/Windows packaging and device-specific benchmarks.
@@ -97,6 +97,6 @@ The intake layer reads only the path supplied by the operator. It does not trans
 ## Current status
 
 - RI-001 validator: implementation and CI verification in progress on the feature branch.
-- RI-002 single-file intake: implementation and CI verification in progress on the feature branch.
+- RI-002 local file and directory intake: implemented; CI verification pending for latest commit.\n- RI-003 FFprobe metadata probe: implemented; CI verification pending for latest commit.
 - Media analysis pipeline: not implemented.
 - Main branch: unchanged by this feature work.
