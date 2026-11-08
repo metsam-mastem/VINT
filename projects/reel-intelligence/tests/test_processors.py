@@ -123,7 +123,7 @@ def test_scene_detection_returns_sorted_bounded_timestamps(tmp_path):
     video = make_video(tmp_path)
     ffmpeg = executable(tmp_path, "ffmpeg", """#!/usr/bin/env python3
 import sys
-sys.stderr.write("[Parsed_showinfo] n:0 pts_time:2.500\n[Parsed_showinfo] n:1 pts_time:5.250\n")
+sys.stderr.write("[Parsed_showinfo] n:0 pts_time:2.500\\n[Parsed_showinfo] n:1 pts_time:5.250\\n")
 """)
     result = SceneDetectionProcessor(ffmpeg_path=ffmpeg, threshold=0.35, max_scenes=1).process(video)
 
