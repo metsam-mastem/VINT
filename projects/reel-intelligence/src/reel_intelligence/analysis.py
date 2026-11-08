@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable
@@ -135,6 +136,7 @@ def build_analysis_bundle(
         start_ms: int,
         end_ms: int,
         confidence: float | None = None,
+        content_hash: str | None = None,
     ) -> None:
         evidence_key = {
             "asset_id": asset_id,
@@ -160,6 +162,10 @@ def build_analysis_bundle(
         }
         if confidence is not None:
             evidence["confidence"] = confidence
+        if content_hash is not None:
+            if not isinstance(content_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", content_hash):
+                raise AnalysisError("content_hash must be a lowercase SHA-256 digest")
+            evidence["content_hash"] = content_hash
         evidence_records.append(evidence)
 
         event_key = {
@@ -209,6 +215,7 @@ def build_analysis_bundle(
             start_ms=start_ms,
             end_ms=end_ms,
             confidence=confidence,
+            content_hash=item.get("content_hash"),
         )
 
     for index, item in enumerate(ocr_items):
@@ -219,13 +226,14 @@ def build_analysis_bundle(
         locator: dict[str, Any] = {"start_ms": timestamp_ms}
         if "path" in item:
             locator["path"] = _relative_locator_path(item["path"])
-        elif "page" in item:
+        if "page" in item:
             locator["page"] = _non_negative_integer(item["page"], f"OCR observation {index} page")
             if locator["page"] < 1:
                 raise AnalysisError("OCR page number must start at 1")
-            locator.pop("start_ms")
-        else:
+        if "path" not in item and "page" not in item:
             raise AnalysisError("OCR observation must provide a relative path or a page number")
+        if "path" not in item:
+            locator.pop("start_ms")
         if "bbox" in item:
             bbox = item["bbox"]
             if not isinstance(bbox, dict):
@@ -248,6 +256,7 @@ def build_analysis_bundle(
             start_ms=timestamp_ms,
             end_ms=timestamp_ms,
             confidence=confidence,
+            content_hash=item.get("content_hash"),
         )
 
     for index, item in enumerate(scene_items):
