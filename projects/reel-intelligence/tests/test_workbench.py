@@ -13,7 +13,7 @@ def test_static_workbench_is_installable_and_offline_capable():
     assert 'name="theme-color"' in html
     assert "serviceWorker" in html
     assert '"display": "standalone"' in manifest
-    assert "addAll" in worker
+    assert "addAll" in worker\n    assert "icon.svg" in manifest\n    assert (WEB / "icon.svg").is_file()
 
 
 def test_workbench_keeps_file_processing_in_browser():
@@ -44,3 +44,13 @@ def test_operator_workflow_is_manual_and_read_only():
     assert "permissions:" in workflow
     assert "pytest" in workflow
     assert "upload-artifact" in workflow
+
+
+
+def test_pages_deployment_is_static_and_scoped_to_workbench():
+    workflow = (ROOT.parents[1] / ".github" / "workflows" / "ri-pages.yml").read_text(encoding="utf-8")
+
+    assert "actions/upload-pages-artifact@v3" in workflow
+    assert "actions/deploy-pages@v4" in workflow
+    assert "path: projects/reel-intelligence/web" in workflow
+    assert "id-token: write" in workflow
