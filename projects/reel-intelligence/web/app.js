@@ -88,6 +88,16 @@ function render() {
   }).join("");
 }
 
+async function hashFileInChunks(file) {
+  const hasher = new RISha256();
+  const chunkSize = 4 * 1024 * 1024;
+  for (let offset = 0; offset < file.size; offset += chunkSize) {
+    const chunk = await file.slice(offset, Math.min(offset + chunkSize, file.size)).arrayBuffer();
+    hasher.update(new Uint8Array(chunk));
+  }
+  return hasher.digest();
+}
+
 async function inspect(file) {
   if (!engineOn) throw new Error("ابتدا موتور محلی را روشن کن.");
   if (!file || file.size === 0) throw new Error("فایل خالی است.");
@@ -95,8 +105,7 @@ async function inspect(file) {
   const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
   const format = detectFormat(bytes);
   if (!format || !supported[format].ext.includes(extension)) throw new Error("قالب فایل پشتیبانی نمی‌شود یا پسوند با امضای فایل مطابقت ندارد.");
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const sha256 = await hashFileInChunks(file);
   const metadata = { detected_format: format, extension };
   const media = await mediaMetadata(file, format);
   Object.assign(metadata, media);
