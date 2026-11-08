@@ -72,18 +72,11 @@ jobs:
           test -s projects/reel-intelligence/web/sw.js
           test -s projects/reel-intelligence/web/manifest.webmanifest
 
-      - name: Package offline workbench
-        if: inputs.operation == 'validate_project'
-        run: |
-          mkdir -p dist
-          cd web
-          zip -r ../dist/reel-intelligence-workbench.zip .
-
       - name: Upload offline workbench bundle
         if: inputs.operation == 'validate_project'
         uses: actions/upload-artifact@v4
         with:
           name: reel-intelligence-workbench
-          path: projects/reel-intelligence/dist/reel-intelligence-workbench.zip
+          path: projects/reel-intelligence/web/
           if-no-files-found: error
           retention-days: 14
