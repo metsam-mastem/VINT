@@ -18,6 +18,7 @@ ri-intake = "reel_intelligence.intake_cli:main"
 ri-probe = "reel_intelligence.probe_cli:main"
 ri-catalog = "reel_intelligence.catalog_cli:main"
 ri-extract = "reel_intelligence.extraction_cli:main"
+ri-analyze = "reel_intelligence.analysis_cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
