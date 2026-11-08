@@ -13,6 +13,7 @@ on:
     paths:
       - "projects/reel-intelligence/**"
       - ".github/workflows/ri-ci.yml"
+      - "scripts/**"
 
 permissions:
   contents: read
