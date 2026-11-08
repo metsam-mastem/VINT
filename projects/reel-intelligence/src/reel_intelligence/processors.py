@@ -45,27 +45,50 @@ def _inspect(path: str | os.PathLike[str], expected: set[str]) -> dict[str, Any]
     return asset
 
 
-def _run(command: list[str], *, timeout: float) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: list[str],
+    *,
+    timeout: float,
+    max_output_bytes: int = 64 * 1024 * 1024,
+) -> subprocess.CompletedProcess[str]:
+    """Execute a local tool without a shell and spool its output to bounded temp files."""
+    if isinstance(max_output_bytes, bool) or not isinstance(max_output_bytes, int) or max_output_bytes < 1024:
+        raise ProcessorError("max_output_bytes must be an integer of at least 1024")
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            check=False,
-            shell=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise ProcessorError(f"processor timed out after {timeout:g} seconds") from exc
+        with tempfile.TemporaryFile(mode="w+b") as stdout_file, tempfile.TemporaryFile(mode="w+b") as stderr_file:
+            try:
+                completed = subprocess.run(
+                    command,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    timeout=timeout,
+                    check=False,
+                    shell=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise ProcessorError(f"processor timed out after {timeout:g} seconds") from exc
+            except OSError as exc:
+                raise ProcessorError(f"processor could not be started: {exc}") from exc
+
+            stdout_size = stdout_file.tell()
+            stderr_size = stderr_file.tell()
+            if stdout_size + stderr_size > max_output_bytes:
+                raise ProcessorError("processor output exceeds the configured byte limit")
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read().decode("utf-8", errors="replace")
+            stderr = stderr_file.read().decode("utf-8", errors="replace")
+
+        result = subprocess.CompletedProcess(command, completed.returncode, stdout, stderr)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()[:500]
+            suffix = f": {detail}" if detail else ""
+            raise ProcessorError(f"processor exited with status {result.returncode}{suffix}")
+        return result
+    except ProcessorError:
+        raise
     except OSError as exc:
-        raise ProcessorError(f"processor could not be started: {exc}") from exc
-    if result.returncode != 0:
-        detail = (result.stderr or "").strip()[:500]
-        suffix = f": {detail}" if detail else ""
-        raise ProcessorError(f"processor exited with status {result.returncode}{suffix}")
-    return result
+        raise ProcessorError(f"processor output could not be collected: {exc}") from exc
 
 
 class OCRProcessor:
@@ -368,3 +391,105 @@ class SceneDetectionProcessor:
             "scenes": timestamps,
             "truncated": len(matches) > len(timestamps),
         }
+
+
+class PDFPageRenderer:
+    """Render PDF pages to PNG with Poppler in a new, isolated output directory."""
+
+    def __init__(
+        self,
+        *,
+        pdftoppm_path: str | os.PathLike[str] | None = None,
+        dpi: int = 150,
+        max_pages: int = 200,
+        timeout_seconds: float = 180.0,
+        max_page_bytes: int = 100 * 1024 * 1024,
+    ) -> None:
+        if isinstance(dpi, bool) or not isinstance(dpi, int) or not 72 <= dpi <= 300:
+            raise ProcessorError("dpi must be an integer between 72 and 300")
+        if isinstance(max_pages, bool) or not isinstance(max_pages, int) or not 1 <= max_pages <= 1000:
+            raise ProcessorError("max_pages must be an integer between 1 and 1000")
+        if isinstance(max_page_bytes, bool) or not isinstance(max_page_bytes, int) or max_page_bytes < 1024:
+            raise ProcessorError("max_page_bytes must be an integer of at least 1024")
+        self.pdftoppm_path = pdftoppm_path
+        self.dpi = dpi
+        self.max_pages = max_pages
+        self.timeout_seconds = _check_timeout(timeout_seconds)
+        self.max_page_bytes = max_page_bytes
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        import hashlib
+
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            while True:
+                block = stream.read(1024 * 1024)
+                if not block:
+                    break
+                digest.update(block)
+        return digest.hexdigest()
+
+    def process(self, path: str | os.PathLike[str], output_dir: str | os.PathLike[str]) -> dict[str, Any]:
+        asset = _inspect(path, {"document"})
+        if asset["metadata"]["detected_format"] != "pdf":
+            raise ProcessorError("PDF page renderer requires a PDF file")
+
+        destination = Path(output_dir)
+        if destination.exists() or destination.is_symlink():
+            raise ProcessorError("PDF render output directory already exists")
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination = destination.parent.resolve(strict=True) / destination.name
+            destination.mkdir(mode=0o700)
+        except OSError as exc:
+            raise ProcessorError(f"cannot create PDF render output directory: {exc}") from exc
+
+        try:
+            executable = _resolve_executable(self.pdftoppm_path, "pdftoppm")
+            prefix = destination / "page"
+            _run(
+                [
+                    executable, "-png", "-r", str(self.dpi), "-f", "1", "-l",
+                    str(self.max_pages), str(Path(path).resolve(strict=True)), str(prefix),
+                ],
+                timeout=self.timeout_seconds,
+                max_output_bytes=1024 * 1024,
+            )
+
+            page_files = []
+            pattern = re.compile(r"^page-(\d+)\.png$")
+            for page_path in sorted(destination.glob("page-*.png"), key=lambda item: item.name.casefold()):
+                if page_path.is_symlink() or not page_path.is_file():
+                    raise ProcessorError("Poppler produced a non-regular PDF page image")
+                match = pattern.match(page_path.name)
+                if match is None:
+                    raise ProcessorError("Poppler produced an unexpected page image filename")
+                page_number = int(match.group(1))
+                size = page_path.stat().st_size
+                if page_number < 1 or page_number > self.max_pages or size <= 0:
+                    raise ProcessorError("Poppler produced an invalid page number or empty image")
+                if size > self.max_page_bytes:
+                    raise ProcessorError("rendered PDF page exceeds the configured byte limit")
+                page_files.append({
+                    "page": page_number,
+                    "path": page_path.name,
+                    "byte_size": size,
+                    "sha256": self._sha256(page_path),
+                })
+            page_files.sort(key=lambda item: item["page"])
+            if len(page_files) > self.max_pages:
+                raise ProcessorError("Poppler produced more pages than the configured limit")
+            if not page_files:
+                raise ProcessorError("Poppler did not render any PDF pages")
+            return {
+                "processor": "pdftoppm",
+                "processor_version": 1,
+                "asset": asset,
+                "dpi": self.dpi,
+                "page_count": len(page_files),
+                "pages": page_files,
+            }
+        except Exception:
+            shutil.rmtree(destination, ignore_errors=True)
+            raise
