@@ -6,7 +6,7 @@ This repository path currently contains four executable engineering increments:
 - **RI-001 — Canonical Contract Validator**
 - **RI-002 — Safe Local File Intake**
 - **RI-003 — FFprobe Media Metadata Inspection**
-- **RI-004 — Local SQLite Asset Catalog**
+- **RI-004 — Local SQLite Asset Catalog**\n- **RI-005 — Bounded Temporal Extraction**
 
 The implementation is dependency-light. Media probing extracts technical metadata; it does not decode or semantically understand media.
 
@@ -143,7 +143,7 @@ List or inspect records:
 
 ```bash
 ri-catalog list --db .reel-intelligence/catalog.sqlite3 --media-type video
-ri-catalog show asset-id --db .reel-intelligence/catalog.sqlite3
+ri-catalog show asset-id --db .reel-intelligence/catalog.sqlite3\nri-extract video.mp4 --output ./derived/video-001 --interval 5 --max-frames 120
 ```
 
 The database remains local. Add the catalog directory to local ignore rules; do not commit personal asset databases.
@@ -154,7 +154,24 @@ The database remains local. Add the catalog directory to local ignore rules; do 
 python -m pytest -q
 ```
 
-GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all four CLI entry points.
+GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all five CLI entry points.
+
+### RI-005 — Temporal extraction
+
+- Optional FFmpeg integration for local MP4, MP3, and WAV media.
+- Samples video frames as JPEG at a configurable interval, with a hard frame-count cap.
+- Extracts the first audio stream as mono 16 kHz PCM WAV, with a maximum processing duration.
+- Uses argument-array subprocess execution, no shell, bounded timeouts, and sanitized output manifests.
+- Requires a new, non-existing output directory; on failure, only the directory created by the current extraction attempt is removed.
+- Source media is never modified. The manifest uses relative output paths and includes frame timestamps.
+- FFmpeg and FFprobe remain external optional executables.
+- CLI: `ri-extract`.
+
+Example:
+
+```bash
+ri-extract input.mp4 --output ./derived/clip-001 --interval 5 --max-frames 120
+```
 
 ## Browser Workbench (RI-WEB)
 
@@ -194,7 +211,7 @@ A dedicated publisher workflow is provided at `.github/workflows/ri-pages.yml`. 
 ## Not implemented yet
 
 - ZIP/archive inspection and safe extraction.
-- Full media decoding, transcoding, and frame/audio extraction.
+- Full media decoding/transcoding pipelines beyond RI-005 sampled frame and normalized-audio extraction.
 - Speech recognition, OCR, scene detection, or multimodal inference.
 - Search/indexing, UI, API, cloud sync, or platform adapters.
 - Android/Windows packaging and device-specific benchmarks.
