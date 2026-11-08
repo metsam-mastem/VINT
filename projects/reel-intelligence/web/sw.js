@@ -1,5 +1,5 @@
 const CACHE_NAME = "ri-workbench-v1";
-const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg"];
+const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./sha256.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
