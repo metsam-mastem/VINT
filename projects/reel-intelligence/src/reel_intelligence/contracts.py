@@ -130,9 +130,9 @@ def _validate_locator(value: Any) -> None:
     for field in ("start_ms", "end_ms", "page", "frame", "byte_offset", "byte_length", "timestamp_ms", "x", "y", "width", "height"):
         if field in value:
             _integer(value[field], f"locator.{field}")
-    if ("start_ms" in value) != ("end_ms" in value):
-        _fail("locator", "start_ms and end_ms must be provided together")
-    if "start_ms" in value and value["end_ms"] < value["start_ms"]:
+    if "end_ms" in value and "start_ms" not in value:
+        _fail("locator", "end_ms requires start_ms")
+    if "start_ms" in value and "end_ms" in value and value["end_ms"] < value["start_ms"]:
         _fail("locator.end_ms", "must be >= locator.start_ms")
     if ("byte_offset" in value) != ("byte_length" in value):
         _fail("locator", "byte_offset and byte_length must be provided together")
