@@ -54,3 +54,4 @@ def test_pages_deployment_is_static_and_scoped_to_workbench():
     assert "actions/deploy-pages@v4" in workflow
     assert "path: projects/reel-intelligence/web" in workflow
     assert "id-token: write" in workflow
+\n\n\ndef test_extraction_cli_is_registered_in_project_metadata():\n    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")\n    assert 'ri-extract = "reel_intelligence.extraction_cli:main"' in project\n
