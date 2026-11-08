@@ -7,11 +7,11 @@ WEB = ROOT / "web"
 def test_static_workbench_is_installable_and_offline_capable():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     manifest = (WEB / "manifest.webmanifest").read_text(encoding="utf-8")
-    worker = (WEB / "sw.js").read_text(encoding="utf-8")
+    worker = (WEB / "sw.js").read_text(encoding="utf-8")\n    app = (WEB / "app.js").read_text(encoding="utf-8")
 
     assert 'rel="manifest"' in html
     assert 'name="theme-color"' in html
-    assert "serviceWorker" in html
+    assert "serviceWorker" in app
     assert '"display": "standalone"' in manifest
     assert "addAll" in worker
     assert "icon.svg" in manifest
