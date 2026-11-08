@@ -136,3 +136,60 @@ def inspect_file(path: str | os.PathLike[str], *, root: str | os.PathLike[str] |
         },
     }
     return validate_record(asset)
+
+
+def inspect_directory(path: str | os.PathLike[str], *, recursive: bool = True) -> list[dict[str, Any]]:
+    """Intake supported files beneath a directory in deterministic order.
+
+    Unsupported extensions are ignored. Any supported file that fails validation,
+    or any symbolic link encountered, aborts the batch instead of silently skipping it.
+    Identical file contents are represented once by their content-addressed Asset ID.
+    """
+    if not isinstance(recursive, bool):
+        raise IntakeError("recursive must be a boolean")
+
+    directory = Path(path)
+    try:
+        if directory.is_symlink():
+            raise IntakeError("symbolic link directories are not accepted")
+        root = directory.resolve(strict=True)
+    except OSError as exc:
+        raise IntakeError(f"cannot access directory: {exc}") from exc
+    if not root.is_dir():
+        raise IntakeError("input path must be a directory")
+
+    files: list[Path] = []
+
+    def fail_walk(error: OSError) -> None:
+        raise IntakeError(f"cannot scan directory: {error}") from error
+
+    if recursive:
+        for current, directories, filenames in os.walk(root, topdown=True, followlinks=False, onerror=fail_walk):
+            current_path = Path(current)
+            for name in list(directories):
+                child = current_path / name
+                if child.is_symlink():
+                    raise IntakeError("symbolic link directories are not accepted")
+            directories.sort()
+            for name in filenames:
+                child = current_path / name
+                if child.is_symlink():
+                    raise IntakeError("symbolic link files are not accepted")
+                if child.suffix.lower() in _FORMATS:
+                    files.append(child)
+    else:
+        try:
+            entries = sorted(root.iterdir(), key=lambda item: item.name.casefold())
+        except OSError as exc:
+            raise IntakeError(f"cannot scan directory: {exc}") from exc
+        for child in entries:
+            if child.is_symlink():
+                raise IntakeError("symbolic link entries are not accepted")
+            if child.is_file() and child.suffix.lower() in _FORMATS:
+                files.append(child)
+
+    assets_by_id: dict[str, dict[str, Any]] = {}
+    for child in sorted(files, key=lambda item: item.relative_to(root).as_posix().casefold()):
+        asset = inspect_file(child, root=root)
+        assets_by_id.setdefault(asset["asset_id"], asset)
+    return list(assets_by_id.values())
