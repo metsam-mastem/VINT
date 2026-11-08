@@ -44,6 +44,15 @@ jobs:
       - name: Compile Python package
         run: python -m compileall -q src
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test streaming SHA-256 implementation
+        working-directory: .
+        run: node --test projects/reel-intelligence/web/tests/hash.test.cjs
+
       - name: Run acceptance suite
         run: python -m pytest -q
 
