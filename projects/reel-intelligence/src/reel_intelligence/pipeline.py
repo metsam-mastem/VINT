@@ -383,11 +383,6 @@ def run_local_analysis(
         else:
             processor_status["ocr"] = "disabled"
 
-        elif enable_ocr:
-            processor_status["ocr"] = "not_applicable"
-        else:
-            processor_status["ocr"] = "disabled"
-
         if enable_scene_detection and media_type == "video":
             try:
                 scene_result = SceneDetectionProcessor(
