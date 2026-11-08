@@ -52,7 +52,7 @@ jobs:
           ri-validate --help
           ri-intake --help
           ri-probe --help
-          ri-catalog --help
+          ri-catalog --help\n          ri-extract --help
 
       - name: Verify static workbench
         working-directory: .
