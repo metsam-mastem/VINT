@@ -100,7 +100,7 @@ A dependency-free, responsive RTL static web app is available in `web/`.
 3. The browser checks extension and file signature, computes SHA-256, and reads browser-exposed image/audio/video metadata.
 4. Export a JSON report.
 
-The file inspection flow does not upload media, call a remote API, or persist selected file bytes. Browser hashing currently reads the selected file into memory; very large media may exceed mobile-browser memory. Use smaller files on low-memory devices.
+The file inspection flow does not upload media, call a remote API, or persist selected file bytes. Browser SHA-256 is incremental: the app reads 4 MiB chunks and maintains a bounded-memory hash state, so it does not load the entire media file into RAM.
 
 The browser workbench is a local intake/inspection surface, not the complete semantic engine. It does not perform ASR, OCR, scene understanding, or evidence/claim generation. Browser-generated Asset records use `source.kind=browser_local_file`; they are reports and are not silently inserted into the Python SQLite catalog.
 
@@ -133,7 +133,7 @@ Only `projects/reel-intelligence/web/` is published. No always-on server, API se
 python -m pytest -q
 ```
 
-GitHub Actions tests Python 3.10, 3.12, and 3.13, compiles the package, and checks all five CLI entry points.
+GitHub Actions tests Python 3.10, 3.12, and 3.13, compiles the package, checks all five CLI entry points, and runs Node-based SHA-256 test vectors.
 
 ## Current status and limitations
 
