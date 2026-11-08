@@ -78,15 +78,17 @@ jobs:
       - name: Test streaming SHA-256 implementation
         run: node --test projects/reel-intelligence/web/tests/hash.test.cjs
 
-      - name: Package static web app
+      - name: Verify static web app bundle
         run: |
-          cd projects/reel-intelligence/web
-          zip -r ../../../reel-intelligence-workbench.zip .
+          test -s projects/reel-intelligence/web/index.html
+          test -s projects/reel-intelligence/web/app.js
+          test -s projects/reel-intelligence/web/sha256.js
+          test -s projects/reel-intelligence/web/sw.js
 
       - name: Upload workbench bundle
         uses: actions/upload-artifact@v4
         with:
           name: reel-intelligence-workbench
-          path: reel-intelligence-workbench.zip
+          path: projects/reel-intelligence/web/
           if-no-files-found: error
           retention-days: 14
