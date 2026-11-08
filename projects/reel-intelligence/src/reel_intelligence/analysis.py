@@ -181,6 +181,7 @@ def build_analysis_bundle(
             "start_ms": start_ms,
             "end_ms": end_ms,
             "event_type": event_type,
+            "text": observation,
             "evidence_ids": [evidence_id],
             "producer": extractor,
             "created_at": timestamp,
