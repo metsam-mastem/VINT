@@ -55,7 +55,7 @@ def test_rejects_empty_file(tmp_path):
 def test_rejects_extension_signature_mismatch(tmp_path):
     source = tmp_path / "fake.png"
     source.write_bytes(b"%PDF-1.7\n")
-    with pytest.raises(IntakeError, match="does not match"):
+    with pytest.raises(IntakeError, match="mismatch"):
         inspect_file(source, root=tmp_path)
 
 
