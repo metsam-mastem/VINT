@@ -1,0 +1,79 @@
+name: RI Workbench Control
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Select the safe remote operation"
+        required: true
+        type: choice
+        options:
+          - self_check
+          - validate_project
+        default: self_check
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ri-workbench-manual
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    name: REEL INTELLIGENCE / ${{ inputs.operation }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: projects/reel-intelligence
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: projects/reel-intelligence/pyproject.toml
+
+      - name: Install local package and test dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Compile Python package
+        run: python -m compileall -q src
+
+      - name: Run acceptance suite
+        run: python -m pytest -q
+
+      - name: Verify command-line interfaces
+        run: |
+          ri-validate --help
+          ri-intake --help
+          ri-probe --help
+          ri-catalog --help
+
+      - name: Verify static workbench
+        working-directory: .
+        run: |
+          test -s projects/reel-intelligence/web/index.html
+          test -s projects/reel-intelligence/web/app.js
+          test -s projects/reel-intelligence/web/sw.js
+          test -s projects/reel-intelligence/web/manifest.webmanifest
+
+      - name: Package offline workbench
+        if: inputs.operation == 'validate_project'
+        run: |
+          mkdir -p dist
+          cd web
+          zip -r ../dist/reel-intelligence-workbench.zip .
+
+      - name: Upload offline workbench bundle
+        if: inputs.operation == 'validate_project'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-intelligence-workbench
+          path: projects/reel-intelligence/dist/reel-intelligence-workbench.zip
+          if-no-files-found: error
+          retention-days: 14
