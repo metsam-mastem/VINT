@@ -13,17 +13,21 @@ def test_static_workbench_is_installable_and_offline_capable():
     assert 'rel="manifest"' in html
     assert 'name="theme-color"' in html
     assert "serviceWorker" in app
+    assert "sha256.js" in html
+    assert "sha256.js" in worker
     assert '"display": "standalone"' in manifest
     assert "addAll" in worker
     assert "icon.svg" in manifest
     assert (WEB / "icon.svg").is_file()
 
 
-def test_workbench_keeps_file_processing_in_browser():
+def test_workbench_hashes_files_in_bounded_browser_chunks():
     app = (WEB / "app.js").read_text(encoding="utf-8")
 
-    assert "crypto.subtle.digest" in app
-    assert "file.arrayBuffer()" in app
+    assert "new RISha256()" in app
+    assert "4 * 1024 * 1024" in app
+    assert "file.slice(" in app
+    assert "file.arrayBuffer()" not in app
     assert "URL.createObjectURL" in app
     assert "fetch(" not in app
     assert "XMLHttpRequest" not in app
@@ -45,6 +49,7 @@ def test_operator_workflow_is_manual_and_read_only():
     assert "permissions:" in workflow
     assert "pytest" in workflow
     assert "upload-artifact" in workflow
+    assert "node --test" in workflow
 
 
 def test_pages_deployment_is_static_and_scoped_to_workbench():
@@ -67,3 +72,4 @@ def test_ci_packages_the_static_workbench_artifact():
     assert "package-workbench:" in workflow
     assert "actions/upload-artifact@v4" in workflow
     assert "reel-intelligence-workbench" in workflow
+    assert "node --test" in workflow
