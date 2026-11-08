@@ -58,3 +58,4 @@ jobs:
         run: |
           ri-validate --help
           ri-intake --help
+          ri-probe --help
