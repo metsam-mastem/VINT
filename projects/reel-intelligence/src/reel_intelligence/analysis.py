@@ -7,6 +7,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable
+import shutil
 
 from .contracts import ContractError, validate_bundle, validate_record
 
@@ -266,12 +267,7 @@ def build_analysis_bundle(
             end_ms=start_ms,
         )
 
-    if clean_warnings and evidence_records:
-        status = "partial"
-    elif clean_warnings:
-        status = "failed"
-    else:
-        status = "completed"
+    status = "partial" if clean_warnings else "completed"
 
     manifest_id = _stable_id(
         "manifest",
@@ -311,3 +307,231 @@ def build_analysis_bundle(
         "timeline_events": event_records,
         "records": records,
     }
+
+
+def _local_executable_available(value: str | Path | None, default: str) -> bool:
+    requested = str(value) if value is not None else default
+    candidate = Path(requested)
+    if candidate.is_absolute() or candidate.parent != Path("."):
+        return candidate.is_file()
+    return shutil.which(requested) is not None
+
+
+def analyze_media(
+    path: str | Path,
+    output_dir: str | Path,
+    *,
+    tesseract_path: str | Path | None = None,
+    pdftotext_path: str | Path | None = None,
+    whisper_model: str | Path | None = None,
+    whisper_path: str | Path | None = None,
+    ffmpeg_path: str | Path | None = None,
+    ffprobe_path: str | Path | None = None,
+    ocr_languages: str = "eng",
+    enable_scenes: bool = True,
+    enable_video_extraction: bool = True,
+    strict: bool = False,
+) -> dict[str, Any]:
+    """Run installed local processors and persist a validated analysis report.
+
+    The output directory must be new. Optional processors are skipped with an
+    explicit warning unless strict=True. Inputs never leave the local machine.
+    """
+    from .extraction import ExtractionError, extract_media
+    from .intake import IntakeError, inspect_file
+    from .processors import ASRProcessor, OCRProcessor, PDFTextProcessor, ProcessorError, SceneDetectionProcessor
+
+    try:
+        asset = inspect_file(path)
+    except IntakeError as exc:
+        raise AnalysisError(str(exc)) from exc
+
+    destination = Path(output_dir)
+    if destination.exists() or destination.is_symlink():
+        raise AnalysisError("analysis output directory already exists")
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination = destination.parent.resolve(strict=True) / destination.name
+        destination.mkdir(mode=0o700)
+    except OSError as exc:
+        raise AnalysisError(f"cannot create analysis output directory: {exc}") from exc
+
+    warnings: list[str] = []
+    toolchain: dict[str, Any] = {}
+    transcript_segments: list[dict[str, Any]] = []
+    ocr_observations: list[dict[str, Any]] = []
+    scene_boundaries: list[int] = []
+    processor_results: list[dict[str, Any]] = []
+    artifacts: list[dict[str, Any]] = []
+
+    def warning(message: str) -> None:
+        if strict:
+            raise AnalysisError(message)
+        warnings.append(message)
+
+    def attempt(name: str, operation):
+        try:
+            result = operation()
+            processor_results.append({"processor": name, "status": "completed"})
+            return result
+        except (ProcessorError, ExtractionError, OSError) as exc:
+            message = f"{name} skipped or failed: {exc}"
+            if strict:
+                raise AnalysisError(message) from exc
+            warnings.append(message)
+            processor_results.append({"processor": name, "status": "failed", "warning": message})
+            return None
+
+    source = Path(path)
+    try:
+        media_type = asset["media_type"]
+        if media_type == "image":
+            if _local_executable_available(tesseract_path, "tesseract"):
+                result = attempt(
+                    "tesseract",
+                    lambda: OCRProcessor(tesseract_path=tesseract_path).process(source, languages=ocr_languages),
+                )
+                if result is not None:
+                    toolchain["ocr"] = "tesseract"
+                    for page in result["pages"]:
+                        if page["text"]:
+                            ocr_observations.append({
+                                "path": asset["filename"],
+                                "text": page["text"],
+                            })
+            else:
+                warning("OCR skipped: Tesseract is not installed or configured")
+
+        elif media_type == "document" and asset["metadata"]["detected_format"] == "pdf":
+            if _local_executable_available(pdftotext_path, "pdftotext"):
+                result = attempt(
+                    "pdftotext",
+                    lambda: PDFTextProcessor(pdftotext_path=pdftotext_path).process(source),
+                )
+                if result is not None:
+                    toolchain["pdf_text"] = "pdftotext"
+                    for page in result["pages"]:
+                        if page["text"]:
+                            ocr_observations.append({"page": page["page"], "text": page["text"]})
+            else:
+                warning("PDF text extraction skipped: Poppler pdftotext is not installed or configured")
+
+        elif media_type == "audio":
+            if whisper_model is None:
+                warning("ASR skipped: configure a local whisper.cpp model with --whisper-model")
+            else:
+                result = attempt(
+                    "whisper.cpp",
+                    lambda: ASRProcessor(model_path=whisper_model, executable=whisper_path).process(source),
+                )
+                if result is not None:
+                    toolchain["asr"] = "whisper.cpp"
+                    transcript_segments.extend(result["segments"])
+
+        elif media_type == "video":
+            if enable_scenes:
+                if _local_executable_available(ffmpeg_path, "ffmpeg"):
+                    result = attempt(
+                        "ffmpeg_scene_detection",
+                        lambda: SceneDetectionProcessor(ffmpeg_path=ffmpeg_path).process(source),
+                    )
+                    if result is not None:
+                        toolchain["scene"] = "ffmpeg"
+                        scene_boundaries.extend(item["start_ms"] for item in result["scenes"])
+                else:
+                    warning("Scene detection skipped: FFmpeg is not installed or configured")
+
+            extraction_result = None
+            if enable_video_extraction:
+                if _local_executable_available(ffmpeg_path, "ffmpeg") and _local_executable_available(ffprobe_path, "ffprobe"):
+                    extraction_result = attempt(
+                        "ffmpeg_temporal_extraction",
+                        lambda: extract_media(
+                            source,
+                            destination / "derivatives",
+                            ffmpeg_path=ffmpeg_path,
+                            ffprobe_path=ffprobe_path,
+                            interval_seconds=5.0,
+                            max_frames=120,
+                            max_duration_seconds=3600.0,
+                        ),
+                    )
+                    if extraction_result is not None:
+                        toolchain["video_extraction"] = "ffmpeg"
+                        for item in extraction_result["files"]:
+                            artifacts.append({"path": "derivatives/" + item["path"], "kind": item["kind"]})
+                else:
+                    warning("Temporal extraction skipped: FFmpeg and FFprobe are both required")
+
+            if extraction_result is not None and _local_executable_available(tesseract_path, "tesseract"):
+                for item in extraction_result["files"]:
+                    if item["kind"] != "video_frame":
+                        continue
+                    frame_path = destination / "derivatives" / item["path"]
+                    result = attempt(
+                        "tesseract_frame_ocr",
+                        lambda frame_path=frame_path: OCRProcessor(tesseract_path=tesseract_path).process(
+                            frame_path, languages=ocr_languages
+                        ),
+                    )
+                    if result is not None:
+                        toolchain["ocr"] = "tesseract"
+                        for page in result["pages"]:
+                            if page["text"]:
+                                ocr_observations.append({
+                                    "path": "derivatives/" + item["path"],
+                                    "timestamp_ms": item.get("timestamp_ms", 0),
+                                    "text": page["text"],
+                                })
+
+            if whisper_model is not None:
+                audio_artifact = next(
+                    (item for item in (extraction_result or {}).get("files", []) if item["kind"] == "normalized_audio"),
+                    None,
+                )
+                if audio_artifact is None:
+                    warning("ASR skipped: no extracted audio stream is available")
+                else:
+                    audio_path = destination / "derivatives" / audio_artifact["path"]
+                    result = attempt(
+                        "whisper.cpp",
+                        lambda: ASRProcessor(model_path=whisper_model, executable=whisper_path).process(audio_path),
+                    )
+                    if result is not None:
+                        toolchain["asr"] = "whisper.cpp"
+                        transcript_segments.extend(result["segments"])
+        else:
+            warning(f"No modality processor is registered for media type {media_type}")
+
+        bundle = build_analysis_bundle(
+            asset,
+            transcript_segments=transcript_segments,
+            ocr_observations=ocr_observations,
+            scene_boundaries_ms=scene_boundaries,
+            warnings=warnings,
+            toolchain=toolchain,
+        )
+        report = {
+            "report_version": "1.0",
+            "pipeline_version": DEFAULT_PIPELINE_VERSION,
+            "created_at": _now(),
+            "asset": asset,
+            "manifest": bundle["manifest"],
+            "records": [asset, *bundle["records"]],
+            "processor_results": processor_results,
+            "artifacts": artifacts,
+            "claims": [],
+        }
+        temporary = destination / ".analysis.json.tmp"
+        final_path = destination / "analysis.json"
+        temporary.write_text(
+            json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(final_path)
+        return report
+    except (AnalysisError, ProcessorError, ExtractionError, ContractError, OSError) as exc:
+        shutil.rmtree(destination, ignore_errors=True)
+        if isinstance(exc, AnalysisError):
+            raise
+        raise AnalysisError(str(exc)) from exc
