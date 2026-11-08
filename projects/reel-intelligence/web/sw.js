@@ -1,4 +1,4 @@
-const CACHE_NAME = "ri-workbench-v1";
+const CACHE_NAME = "ri-workbench-v2";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./sha256.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
