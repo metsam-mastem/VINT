@@ -186,7 +186,7 @@ def run_local_analysis(
     ocr_observations: list[dict[str, Any]] = []
     scene_boundaries: list[dict[str, Any]] = []
     extraction_result: dict[str, Any] | None = None
-    report_files: list[str] = ["asset.json", "analysis.json", "run_manifest.json"]
+    report_files: list[str] = ["asset.json", "analysis.json", "run_manifest.json"]\n    artifact_records: list[dict[str, Any]] = []
 
     def record_warning(name: str, exc: Exception) -> None:
         warning = f"{name}: {_safe_error(exc, [source, destination, Path(asr_model_path) if asr_model_path else source])}"
@@ -215,6 +215,14 @@ def run_local_analysis(
                     raise PipelineError("source media changed between intake and extraction")
                 _atomic_write_json(destination / "extraction.json", extraction_result)
                 report_files.append("extraction.json")
+                for item in extraction_result.get("files", []):
+                    artifact_records.append({
+                        "kind": item["kind"],
+                        "path": f"derived/{item['path']}",
+                        "byte_size": item["byte_size"],
+                        "sha256": item["sha256"],
+                        **({"timestamp_ms": item["timestamp_ms"]} if "timestamp_ms" in item else {}),
+                    })
                 toolchain["extraction"] = "ffmpeg+ffprobe"
                 processor_status["extraction"] = "completed"
             except (ExtractionError, OSError, PipelineError) as exc:
@@ -350,6 +358,14 @@ def run_local_analysis(
                     ).process(source, destination / "pdf-pages")
                     _atomic_write_json(destination / "pdf-render.json", render)
                     report_files.append("pdf-render.json")
+                    for page in render.get("pages", []):
+                        artifact_records.append({
+                            "kind": "pdf_page",
+                            "path": f"pdf-pages/{page['path']}",
+                            "page": page["page"],
+                            "byte_size": page["byte_size"],
+                            "sha256": page["sha256"],
+                        })
                     toolchain["pdf_render"] = render["processor"]
                     ocr = OCRProcessor(
                         tesseract_path=tesseract_path,
@@ -428,6 +444,8 @@ def run_local_analysis(
             "analysis_version": 1,
             "asset": asset,
             **bundle,
+            "artifacts": artifact_records,
+            "claims": [],
         }
         _atomic_write_json(destination / "analysis.json", analysis_document)
 
@@ -450,6 +468,7 @@ def run_local_analysis(
             "asset": asset,
             "manifest": bundle["manifest"],
             "records": bundle["records"],
+            "artifacts": artifact_records,
             "warnings": warnings,
             "processor_status": processor_status,
             "run_manifest": run_manifest,
