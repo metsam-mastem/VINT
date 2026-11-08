@@ -1,8 +1,10 @@
 """Bounded FFmpeg extraction of sampled video frames and normalized audio."""
 from __future__ import annotations
 
+import hashlib
 import math
 import os
+import stat
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +15,47 @@ from .probe import ProbeError, probe_media
 
 class ExtractionError(ValueError):
     """Raised when temporal media extraction cannot be completed safely."""
+
+
+def _describe_derived_file(path: Path, *, root: Path, kind: str, relative_path: str) -> dict[str, Any]:
+    """Validate, stream-hash, and describe one processor-created derivative."""
+    if path.is_symlink():
+        raise ExtractionError("ffmpeg produced a symbolic-link output")
+    try:
+        resolved = path.resolve(strict=True)
+        root_resolved = root.resolve(strict=True)
+        details = path.stat()
+    except OSError as exc:
+        raise ExtractionError(f"cannot inspect derived output: {exc}") from exc
+    if not resolved.is_relative_to(root_resolved):
+        raise ExtractionError("derived output escaped the extraction directory")
+    if not stat.S_ISREG(details.st_mode) or details.st_size <= 0:
+        raise ExtractionError("ffmpeg output must be a non-empty regular file")
+
+    digest = hashlib.sha256()
+    try:
+        with resolved.open("rb") as stream:
+            before = os.fstat(stream.fileno())
+            while True:
+                block = stream.read(1024 * 1024)
+                if not block:
+                    break
+                digest.update(block)
+            after = os.fstat(stream.fileno())
+    except OSError as exc:
+        raise ExtractionError(f"cannot hash derived output: {exc}") from exc
+
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if before_identity != after_identity:
+        raise ExtractionError("derived output changed while being hashed")
+
+    return {
+        "kind": kind,
+        "path": relative_path,
+        "byte_size": after.st_size,
+        "sha256": digest.hexdigest(),
+    }
 
 
 def _resolve_executable(value: str | os.PathLike[str] | None) -> str:
@@ -127,14 +170,14 @@ def extract_media(
             if len(frame_paths) > max_frames:
                 raise ExtractionError("ffmpeg produced more frames than the configured limit")
             for index, frame in enumerate(frame_paths, start=1):
-                if not frame.is_file() or frame.stat().st_size <= 0:
-                    raise ExtractionError("ffmpeg produced an empty frame")
-                generated.append({
-                    "kind": "video_frame",
-                    "path": f"frames/{frame.name}",
-                    "timestamp_ms": round((index - 1) * interval_seconds * 1000),
-                    "byte_size": frame.stat().st_size,
-                })
+                item = _describe_derived_file(
+                    frame,
+                    root=destination,
+                    kind="video_frame",
+                    relative_path=f"frames/{frame.name}",
+                )
+                item["timestamp_ms"] = round((index - 1) * interval_seconds * 1000)
+                generated.append(item)
 
         audio_extracted = False
         if has_audio:
@@ -146,15 +189,15 @@ def extract_media(
                 "-c:a", "pcm_s16le", "-f", "wav", str(audio_path),
             ]
             _run(command, timeout_seconds=timeout_seconds)
-            if not audio_path.is_file() or audio_path.stat().st_size <= 0:
-                raise ExtractionError("ffmpeg produced an empty audio file")
-            generated.append({
-                "kind": "normalized_audio",
-                "path": "audio.wav",
-                "sample_rate": 16000,
-                "channels": 1,
-                "byte_size": audio_path.stat().st_size,
-            })
+            audio_item = _describe_derived_file(
+                audio_path,
+                root=destination,
+                kind="normalized_audio",
+                relative_path="audio.wav",
+            )
+            audio_item["sample_rate"] = 16000
+            audio_item["channels"] = 1
+            generated.append(audio_item)
             audio_extracted = True
 
         if not generated:
