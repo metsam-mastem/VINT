@@ -110,3 +110,43 @@ def test_cleans_new_output_directory_after_ffmpeg_failure(tmp_path):
 def test_rejects_invalid_extraction_limits(tmp_path, kwargs):
     with pytest.raises(ExtractionError):
         extract_media(make_media(tmp_path), tmp_path / "out", **kwargs)
+
+
+def test_extraction_records_sha256_for_each_derived_file(tmp_path):
+    media = make_media(tmp_path)
+    output = tmp_path / "derived" / "hashes"
+    result = extract_media(
+        media, output,
+        ffprobe_path=fake_ffprobe(tmp_path),
+        ffmpeg_path=fake_ffmpeg(tmp_path),
+        interval_seconds=2,
+    )
+
+    import hashlib
+
+    for item in result["files"]:
+        derived = output / item["path"]
+        assert item["byte_size"] == derived.stat().st_size
+        assert item["sha256"] == hashlib.sha256(derived.read_bytes()).hexdigest()
+
+
+def test_extraction_rejects_symlinked_output_and_cleans_run_directory(tmp_path):
+    media = make_media(tmp_path)
+    outside = tmp_path / "outside.jpg"
+    outside.write_bytes(b"outside")
+    ffmpeg = executable(tmp_path, "symlink_ffmpeg", """#!/usr/bin/env python3
+import pathlib, sys
+args = sys.argv[1:]
+if "-f" in args and args[args.index("-f") + 1] == "image2":
+    target = pathlib.Path(args[-1].replace("%06d", "000001"))
+    target.symlink_to(pathlib.Path(""" + repr(str(outside)) + """))
+elif "-f" in args and args[args.index("-f") + 1] == "wav":
+    pathlib.Path(args[-1]).write_bytes(b"fake-wav")
+""")
+    output = tmp_path / "derived" / "symlink-run"
+
+    with pytest.raises(ExtractionError, match="symbolic|regular|inside"):
+        extract_media(media, output, ffprobe_path=fake_ffprobe(tmp_path), ffmpeg_path=ffmpeg)
+
+    assert outside.read_bytes() == b"outside"
+    assert not output.exists()
