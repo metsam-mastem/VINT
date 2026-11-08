@@ -5,7 +5,8 @@ Platform-independent, local-first multimodal intelligence workbench.
 This repository path currently contains four executable engineering increments:
 - **RI-001 — Canonical Contract Validator**
 - **RI-002 — Safe Local File Intake**
-- **RI-003 — FFprobe Media Metadata Inspection**\n- **RI-004 — Local SQLite Asset Catalog**
+- **RI-003 — FFprobe Media Metadata Inspection**
+- **RI-004 — Local SQLite Asset Catalog**
 
 The implementation is dependency-light. Media probing extracts technical metadata; it does not decode or semantically understand media.
 
@@ -36,6 +37,12 @@ The implementation is dependency-light. Media probing extracts technical metadat
 - Uses an argument-array subprocess call, no shell, a bounded timeout, and sanitized JSON output.
 - FFprobe is an external optional executable; it is not installed by the Python package.
 - Does not decode, transcode, extract frames, or perform semantic analysis.
+
+### RI-004 — Local SQLite catalog
+- Stores canonical Asset records and normalized probe metadata in a local SQLite database.
+- Supports idempotent insertion, content-hash uniqueness, media-type filtering, pagination, and asset lookup.
+- Uses a versioned schema and SQLite transactions; no server or external database is required.
+- Does not store absolute source paths.
 
 ## Install
 
@@ -95,7 +102,7 @@ ri-intake /path/to/media --no-recursive
 
 The intake command prints canonical Asset JSON. It does not copy, move, upload, decode, or modify source files.
 
-## Catalog assets locally\n\nInitialize a catalog database:\n\n```bash\nri-catalog init --db .reel-intelligence/catalog.sqlite3\n```\n\nAdd a single file or recursively import a directory:\n\n```bash\nri-catalog add path/to/sample.mp4 --db .reel-intelligence/catalog.sqlite3\nri-catalog add /path/to/media --db .reel-intelligence/catalog.sqlite3\n```\n\nProbe before saving an audio/video file (requires FFprobe):\n\n```bash\nri-catalog add path/to/sample.mp4 --db .reel-intelligence/catalog.sqlite3 --probe\n```\n\nList or inspect records:\n\n```bash\nri-catalog list --db .reel-intelligence/catalog.sqlite3 --media-type video\nri-catalog show asset-<id> --db .reel-intelligence/catalog.sqlite3\n```\n\nThe database remains local. Add the catalog directory to local ignore rules; do not commit personal asset databases.\n\n## Probe media metadata
+## Probe media metadata
 
 FFprobe must be installed separately and available on PATH:
 
@@ -111,6 +118,36 @@ ri-probe path/to/sample.mp4 --ffprobe /usr/bin/ffprobe --timeout 15
 
 The command returns a sanitized JSON object containing the Asset record and normalized FFprobe metadata. Absolute local paths and FFprobe tags are not included.
 
+## Catalog assets locally
+
+Initialize a catalog database:
+
+```bash
+ri-catalog init --db .reel-intelligence/catalog.sqlite3
+```
+
+Add a single file or recursively import a directory:
+
+```bash
+ri-catalog add path/to/sample.mp4 --db .reel-intelligence/catalog.sqlite3
+ri-catalog add /path/to/media --db .reel-intelligence/catalog.sqlite3
+```
+
+Probe before saving an audio/video file (requires FFprobe):
+
+```bash
+ri-catalog add path/to/sample.mp4 --db .reel-intelligence/catalog.sqlite3 --probe
+```
+
+List or inspect records:
+
+```bash
+ri-catalog list --db .reel-intelligence/catalog.sqlite3 --media-type video
+ri-catalog show asset-id --db .reel-intelligence/catalog.sqlite3
+```
+
+The database remains local. Add the catalog directory to local ignore rules; do not commit personal asset databases.
+
 ## Run tests
 
 ```bash
@@ -124,7 +161,7 @@ GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all fo
 - ZIP/archive inspection and safe extraction.
 - Full media decoding, transcoding, and frame/audio extraction.
 - Speech recognition, OCR, scene detection, or multimodal inference.
-- Database persistence, search/indexing, UI, API, cloud sync, or platform adapters.
+- Search/indexing, UI, API, cloud sync, or platform adapters.
 - Android/Windows packaging and device-specific benchmarks.
 
 These are future increments and must not be inferred from RI-001 through RI-004.
@@ -138,7 +175,8 @@ The intake layer reads only paths supplied by the operator. It does not transmit
 - RI-001 canonical validator: implemented; verified in CI.
 - RI-002 local file and directory intake: implemented; supported formats and path-safety checks pass.
 - RI-003 FFprobe metadata probe: implemented; fake-executable integration tests pass.
-- CI matrix: PASS on Python 3.10, 3.12, and 3.13 for the current code commit.
+- RI-004 SQLite asset catalog: implemented; persistence, deduplication, filtering, and retrieval tests pass.
+- CI matrix: PASS on Python 3.10, 3.12, and 3.13; 57 tests pass per version (171 test executions).
 - Device-level and native FFprobe integration benchmarks: NOT RUN.
 - Semantic media analysis pipeline: not implemented.
 - Main branch: unchanged by this feature work.
