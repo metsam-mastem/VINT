@@ -189,7 +189,7 @@ The manual operator workflow is `.github/workflows/ri-workbench.yml`.
 
 The workflow uses a temporary GitHub-hosted runner and read-only repository permissions. It does not accept or upload personal media. No GitHub token is embedded in the static app. The dashboard's Actions link intentionally hands control to GitHub's authenticated interface rather than storing credentials in the browser.
 
-To publish the web app with GitHub Pages, enable **Settings → Pages → Build and deployment → GitHub Actions** after the feature is merged to the default branch. The static site itself requires no always-on server or database.
+A dedicated publisher workflow is provided at `.github/workflows/ri-pages.yml`. After merging to the default branch, enable **Settings → Pages → Build and deployment → GitHub Actions**. The workflow publishes only `projects/reel-intelligence/web/` on relevant changes to `main`; it can also be started manually with `workflow_dispatch`. The static site itself requires no always-on server or database. The public Pages URL becomes available in the workflow deployment result.
 
 ## Not implemented yet
 
