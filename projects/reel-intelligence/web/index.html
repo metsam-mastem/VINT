@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="REEL INTELLIGENCE — پردازش محلی فایل‌ها و کنترل اجرای GitHub Actions">
+  <title>REEL INTELLIGENCE · Workbench</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="REEL INTELLIGENCE">
+        <span class="brand-mark">RI</span>
+        <span><b>REEL INTELLIGENCE</b><small>Multimodal Intelligence Workbench</small></span>
+      </a>
+      <div class="top-status"><span class="pulse"></span><span id="connectionState">آماده‌سازی محیط محلی</span></div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">LOCAL-FIRST · ZERO SERVER · OPEN WORKFLOW</div>
+          <h1>میزکار هوشمندی<br><em>رسانه و شواهد</em></h1>
+          <p>فایل را انتخاب کن؛ شناسایی قالب، SHA-256 و فرادادهٔ قابل‌دسترسی در همین مرورگر استخراج می‌شود. فایل از دستگاه خارج نمی‌شود.</p>
+          <div class="hero-tags"><span>● پردازش محلی</span><span>● قابل استفاده آفلاین</span><span>● بدون API Key</span></div>
+        </div>
+        <div class="power-card">
+          <div class="power-top"><span>LOCAL ENGINE</span><span class="live-label" id="engineLabel">STANDBY</span></div>
+          <button id="powerSwitch" class="power-switch" type="button" aria-pressed="false" aria-label="روشن یا خاموش کردن موتور محلی">
+            <span class="power-icon">⏻</span><span id="powerText">روشن کردن موتور</span>
+          </button>
+          <p class="power-note">این کلید موتور محلی مرورگر را فعال می‌کند؛ برای اجرای Runner از کنترل GitHub Actions استفاده کن.</p>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel intake-panel">
+          <div class="panel-head"><div><span class="eyebrow">01 / INGESTION</span><h2>ورود و بررسی فایل</h2></div><span class="step">01</span></div>
+          <label id="dropZone" class="drop-zone" for="fileInput">
+            <span class="upload-icon">↥</span>
+            <strong>فایل‌ها را اینجا رها کن</strong>
+            <span>یا برای انتخاب از دستگاه لمس کن</span>
+            <small>MP4 · MP3 · WAV · JPG · PNG · PDF</small>
+          </label>
+          <input id="fileInput" type="file" multiple accept=".mp4,.mp3,.wav,.jpg,.jpeg,.png,.pdf,video/mp4,audio/mpeg,audio/wav,image/jpeg,image/png,application/pdf">
+          <div class="toolbar"><span id="fileCount">۰ فایل انتخاب شده</span><button id="clearButton" class="text-button" type="button" disabled>پاک‌سازی فهرست</button></div>
+          <div id="results" class="results" aria-live="polite"><div class="empty-state">هنوز فایلی وارد نشده است.</div></div>
+        </div>
+
+        <aside class="panel control-panel">
+          <div class="panel-head"><div><span class="eyebrow">02 / ORCHESTRATION</span><h2>کنترل اجرای موتور</h2></div><span class="step">02</span></div>
+          <div class="runner-card">
+            <div class="runner-icon">⌘</div>
+            <div><b>GitHub Actions Runner</b><p>اجرای آزمون‌ها و کنترل سلامت موتور روی Runner موقت GitHub.</p></div>
+            <span class="runner-badge">ON-DEMAND</span>
+          </div>
+          <a class="action-button" href="https://github.com/metsam-mastem/VINT/pull/1/checks" target="_blank" rel="noopener noreferrer">
+            <span>⏵</span> مشاهده / اجرای مجدد CI همین شاخه
+          </a>
+          <a class="workflow-link" href="https://github.com/metsam-mastem/VINT/actions/workflows/ri-workbench.yml" target="_blank" rel="noopener noreferrer">کنترل دستی موتور · پس از ادغام در شاخهٔ اصلی ↗</a>
+          <p class="microcopy">برای اجرای مجدد آزمون‌های همین شاخه، صفحهٔ Checks را باز کن و پس از تکمیل اجرا از گزینهٔ <b>Re-run jobs</b> استفاده کن. کنترل دستی Workflow پس از قرارگیری آن در شاخهٔ اصلی فعال می‌شود. هیچ توکنی در وب‌اپ ذخیره نمی‌شود.</p>
+          <div class="divider"></div>
+          <div class="status-list">
+            <div><span>پردازش فایل</span><b class="ok">داخل مرورگر</b></div>
+            <div><span>ارسال فایل به سرور</span><b class="ok">غیرفعال</b></div>
+            <div><span>Runner ابری</span><b>با درخواست شما</b></div>
+            <div><span>تحلیل معنایی کامل</span><b class="muted">در دست توسعه</b></div>
+          </div>
+          <div class="divider"></div>
+          <button id="exportButton" class="secondary-button" type="button" disabled>↓ دریافت گزارش JSON</button>
+          <p class="microcopy">گزارش شامل هش و فرادادهٔ استخراج‌شده است؛ محتوای فایل داخل گزارش قرار نمی‌گیرد.</p>
+        </aside>
+      </section>
+
+      <section class="panel pipeline">
+        <div class="panel-head"><div><span class="eyebrow">03 / PIPELINE STATUS</span><h2>نقشهٔ قابلیت‌ها</h2></div><span class="step">03</span></div>
+        <div class="pipeline-grid">
+          <div class="pipeline-item done"><span>✓</span><b>Contract Validator</b><small>RI-001 · PASS</small></div>
+          <div class="pipeline-item done"><span>✓</span><b>Local Intake</b><small>RI-002 · PASS</small></div>
+          <div class="pipeline-item done"><span>✓</span><b>Media Probe</b><small>RI-003 · PASS*</small></div>
+          <div class="pipeline-item done"><span>✓</span><b>SQLite Catalog</b><small>RI-004 · PASS</small></div>
+          <div class="pipeline-item active"><span>◷</span><b>Browser Workbench</b><small>RI-WEB · ACTIVE</small></div>
+          <div class="pipeline-item pending"><span>○</span><b>Temporal Extraction</b><small>RI-005 · NEXT</small></div>
+          <div class="pipeline-item pending"><span>○</span><b>ASR / OCR / Scenes</b><small>RI-006 · PLANNED</small></div>
+          <div class="pipeline-item pending"><span>○</span><b>Evidence & Timeline</b><small>RI-007 · PLANNED</small></div>
+        </div>
+        <p class="footnote">* آزمون‌های FFprobe با executable آزمایشی PASS هستند؛ آزمون یکپارچه با فایل واقعی و FFprobe نصب‌شده هنوز اجرا نشده است.</p>
+      </section>
+    </main>
+    <footer><span>REEL INTELLIGENCE · VINT</span><span>LOCAL DATA STAYS LOCAL</span></footer>
+  </div>
+  <script src="./sha256.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>

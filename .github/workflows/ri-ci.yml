@@ -1,0 +1,193 @@
+name: REEL INTELLIGENCE CI
+
+on:
+  pull_request:
+    paths:
+      - "projects/reel-intelligence/**"
+      - ".github/workflows/ri-ci.yml"
+      - "scripts/**"
+  push:
+    branches:
+      - main
+      - feat/reel-intelligence-ri001-contract-validator
+    paths:
+      - "projects/reel-intelligence/**"
+      - ".github/workflows/ri-ci.yml"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reel-intelligence-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} / REEL INTELLIGENCE
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]
+
+    defaults:
+      run:
+        working-directory: projects/reel-intelligence
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: projects/reel-intelligence/pyproject.toml
+
+      - name: Install package and test dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Compile package
+        run: python -m compileall -q src
+
+      - name: Run acceptance tests
+        run: python -m pytest -q
+
+      - name: Verify CLI entry points
+        run: |
+          ri-validate --help
+          ri-intake --help
+          ri-probe --help
+          ri-catalog --help
+          ri-extract --help
+          ri-analyze --help
+
+
+  native-media-integration:
+    name: Native local media integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install native media processors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg tesseract-ocr poppler-utils
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project and temporary fixture generators
+        working-directory: projects/reel-intelligence
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip install Pillow reportlab
+
+      - name: Check local bootstrap scripts
+        run: |
+          bash -n scripts/bootstrap-local.sh
+          bash -n scripts/check-local-tools.sh
+          bash -n scripts/run-analysis.sh
+
+      - name: Generate local image, PDF and video fixtures
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          from reportlab.pdfgen import canvas
+
+          root = Path("/tmp/ri-native-fixtures")
+          root.mkdir(parents=True, exist_ok=True)
+
+          image = Image.new("RGB", (1100, 220), "white")
+          draw = ImageDraw.Draw(image)
+          font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 66)
+          draw.text((24, 52), "REEL INTELLIGENCE", fill="black", font=font)
+          image.save(root / "proof.png")
+
+          pdf = canvas.Canvas(str(root / "proof.pdf"), pagesize=(720, 240))
+          pdf.setFont("Helvetica-Bold", 28)
+          pdf.drawString(32, 150, "REEL INTELLIGENCE PDF CHECK")
+          pdf.showPage()
+          pdf.setFont("Helvetica", 22)
+          pdf.drawString(32, 150, "SECOND PAGE EVIDENCE")
+          pdf.save()
+          PY
+
+          ffmpeg -y -hide_banner -loglevel error \
+            -f lavfi -i "color=c=black:s=320x240:r=10:d=1" \
+            -f lavfi -i "color=c=white:s=320x240:r=10:d=1" \
+            -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0,format=yuv420p" \
+            -c:v libx264 -movflags +faststart /tmp/ri-native-fixtures/proof.mp4
+
+      - name: Execute real OCR, PDF, FFmpeg and FFprobe pipelines
+        working-directory: projects/reel-intelligence
+        run: |
+          ri-analyze /tmp/ri-native-fixtures/proof.png \
+            --output /tmp/ri-native-fixtures/image-run \
+            --tesseract tesseract --strict
+
+          ri-analyze /tmp/ri-native-fixtures/proof.pdf \
+            --output /tmp/ri-native-fixtures/pdf-run \
+            --pdftotext pdftotext --strict
+
+          ri-analyze /tmp/ri-native-fixtures/proof.mp4 \
+            --output /tmp/ri-native-fixtures/video-run \
+            --ffmpeg ffmpeg --ffprobe ffprobe --tesseract tesseract \
+            --frame-interval 1 --max-frames 4 --max-duration 3 --strict
+
+      - name: Verify native analysis evidence and derivatives
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("/tmp/ri-native-fixtures")
+          image = json.loads((root / "image-run/analysis.json").read_text(encoding="utf-8"))
+          pdf = json.loads((root / "pdf-run/analysis.json").read_text(encoding="utf-8"))
+          video = json.loads((root / "video-run/analysis.json").read_text(encoding="utf-8"))
+
+          assert any(item.get("modality") == "image" and "REEL INTELLIGENCE" in item.get("observation", "") for item in image["records"])
+          assert any(item.get("modality") == "document" and "SECOND PAGE EVIDENCE" in item.get("observation", "") for item in pdf["records"])
+          assert any(item.get("event_type") == "scene_boundary" for item in video["records"])
+          assert any(item.get("kind") == "video_frame" for item in video["artifacts"])
+          print("Native Tesseract, Poppler, FFmpeg, FFprobe integration: PASS")
+          PY
+
+  package-workbench:
+    name: Package offline web workbench
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for browser hash tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test streaming SHA-256 implementation
+        run: node --test projects/reel-intelligence/web/tests/hash.test.cjs
+
+      - name: Verify static web app bundle
+        run: |
+          test -s projects/reel-intelligence/web/index.html
+          test -s projects/reel-intelligence/web/app.js
+          test -s projects/reel-intelligence/web/sha256.js
+          test -s projects/reel-intelligence/web/sw.js
+
+      - name: Upload workbench bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-intelligence-workbench
+          path: projects/reel-intelligence/web/
+          if-no-files-found: error
+          retention-days: 14
