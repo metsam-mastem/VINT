@@ -59,4 +59,26 @@ jobs:
           ri-validate --help
           ri-intake --help
           ri-probe --help
-          ri-catalog --help\n          ri-extract --help
+          ri-catalog --help
+          ri-extract --help
+
+  package-workbench:
+    name: Package offline web workbench
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Package static web app
+        run: |
+          cd projects/reel-intelligence/web
+          zip -r ../../../reel-intelligence-workbench.zip .
+
+      - name: Upload workbench bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-intelligence-workbench
+          path: reel-intelligence-workbench.zip
+          if-no-files-found: error
+          retention-days: 14
