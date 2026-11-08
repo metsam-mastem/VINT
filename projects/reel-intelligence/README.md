@@ -26,7 +26,7 @@ The implementation is deliberately dependency-light. Media decoding and AI analy
 - Empty files, symbolic links, non-regular files, and paths outside an optional permitted root are rejected.
 - Content-addressed Asset IDs are stable for identical file bytes.
 - Absolute source paths are not stored in the returned Asset record.
-- Detects changes to the file during inspection.
+- Detects changes to the file during inspection.\n- Recursive or top-level directory intake with deterministic ordering, content deduplication, and fail-closed symlink handling.
 
 ## Install
 
@@ -82,7 +82,7 @@ GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and checks both CLI
 
 ## Not implemented yet
 
-- Directory/batch intake and ZIP/archive inspection.
+- ZIP/archive inspection and safe extraction.
 - FFmpeg/ffprobe metadata extraction or full media decoding.
 - Speech recognition, OCR, scene detection, or multimodal inference.
 - Database persistence, search/indexing, UI, API, cloud sync, or platform adapters.
