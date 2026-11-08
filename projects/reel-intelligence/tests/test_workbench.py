@@ -13,7 +13,9 @@ def test_static_workbench_is_installable_and_offline_capable():
     assert 'name="theme-color"' in html
     assert "serviceWorker" in html
     assert '"display": "standalone"' in manifest
-    assert "addAll" in worker\n    assert "icon.svg" in manifest\n    assert (WEB / "icon.svg").is_file()
+    assert "addAll" in worker
+    assert "icon.svg" in manifest
+    assert (WEB / "icon.svg").is_file()
 
 
 def test_workbench_keeps_file_processing_in_browser():
@@ -26,12 +28,10 @@ def test_workbench_keeps_file_processing_in_browser():
     assert "XMLHttpRequest" not in app
 
 
-def test_workbench_has_safe_github_actions_handoff():
+def test_workbench_exposes_current_branch_checks_and_manual_workflow():
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    app = (WEB / "app.js").read_text(encoding="utf-8")
 
-    assert "RI Workbench Control" in html
-    assert "actions/workflows/ri-workbench.yml" in html
+    assert "pull/1/checks" in html
     assert "actions/workflows/ri-workbench.yml" in html
     assert "GitHub Actions" in html
 
@@ -46,7 +46,6 @@ def test_operator_workflow_is_manual_and_read_only():
     assert "upload-artifact" in workflow
 
 
-
 def test_pages_deployment_is_static_and_scoped_to_workbench():
     workflow = (ROOT.parents[1] / ".github" / "workflows" / "ri-pages.yml").read_text(encoding="utf-8")
 
@@ -54,4 +53,16 @@ def test_pages_deployment_is_static_and_scoped_to_workbench():
     assert "actions/deploy-pages@v4" in workflow
     assert "path: projects/reel-intelligence/web" in workflow
     assert "id-token: write" in workflow
-\n\n\ndef test_extraction_cli_is_registered_in_project_metadata():\n    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")\n    assert 'ri-extract = "reel_intelligence.extraction_cli:main"' in project\n
+
+
+def test_extraction_cli_is_registered_in_project_metadata():
+    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'ri-extract = "reel_intelligence.extraction_cli:main"' in project
+
+
+def test_ci_packages_the_static_workbench_artifact():
+    workflow = (ROOT.parents[1] / ".github" / "workflows" / "ri-ci.yml").read_text(encoding="utf-8")
+
+    assert "package-workbench:" in workflow
+    assert "actions/upload-artifact@v4" in workflow
+    assert "reel-intelligence-workbench" in workflow
