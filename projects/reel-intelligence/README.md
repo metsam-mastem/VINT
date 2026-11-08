@@ -2,10 +2,10 @@
 
 Platform-independent, local-first multimodal intelligence workbench.
 
-This repository path currently contains three executable engineering increments:
+This repository path currently contains four executable engineering increments:
 - **RI-001 — Canonical Contract Validator**
 - **RI-002 — Safe Local File Intake**
-- **RI-003 — FFprobe Media Metadata Inspection**
+- **RI-003 — FFprobe Media Metadata Inspection**\n- **RI-004 — Local SQLite Asset Catalog**
 
 The implementation is dependency-light. Media probing extracts technical metadata; it does not decode or semantically understand media.
 
@@ -95,7 +95,7 @@ ri-intake /path/to/media --no-recursive
 
 The intake command prints canonical Asset JSON. It does not copy, move, upload, decode, or modify source files.
 
-## Probe media metadata
+## Catalog assets locally\n\nInitialize a catalog database:\n\n```bash\nri-catalog init --db .reel-intelligence/catalog.sqlite3\n```\n\nAdd a single file or recursively import a directory:\n\n```bash\nri-catalog add path/to/sample.mp4 --db .reel-intelligence/catalog.sqlite3\nri-catalog add /path/to/media --db .reel-intelligence/catalog.sqlite3\n```\n\nProbe before saving an audio/video file (requires FFprobe):\n\n```bash\nri-catalog add path/to/sample.mp4 --db .reel-intelligence/catalog.sqlite3 --probe\n```\n\nList or inspect records:\n\n```bash\nri-catalog list --db .reel-intelligence/catalog.sqlite3 --media-type video\nri-catalog show asset-<id> --db .reel-intelligence/catalog.sqlite3\n```\n\nThe database remains local. Add the catalog directory to local ignore rules; do not commit personal asset databases.\n\n## Probe media metadata
 
 FFprobe must be installed separately and available on PATH:
 
@@ -117,7 +117,7 @@ The command returns a sanitized JSON object containing the Asset record and norm
 python -m pytest -q
 ```
 
-GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all three CLI entry points.
+GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all four CLI entry points.
 
 ## Not implemented yet
 
@@ -127,7 +127,7 @@ GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all th
 - Database persistence, search/indexing, UI, API, cloud sync, or platform adapters.
 - Android/Windows packaging and device-specific benchmarks.
 
-These are future increments and must not be inferred from RI-001 through RI-003.
+These are future increments and must not be inferred from RI-001 through RI-004.
 
 ## Local-first and privacy
 
@@ -135,7 +135,7 @@ The intake layer reads only paths supplied by the operator. It does not transmit
 
 ## Current status
 
-- RI-001 canonical validator: implemented; 50 tests pass in the current CI matrix.
+- RI-001 canonical validator: implemented; verified in CI.
 - RI-002 local file and directory intake: implemented; supported formats and path-safety checks pass.
 - RI-003 FFprobe metadata probe: implemented; fake-executable integration tests pass.
 - CI matrix: PASS on Python 3.10, 3.12, and 3.13 for the current code commit.
