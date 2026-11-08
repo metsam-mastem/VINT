@@ -151,3 +151,72 @@ Do not infer full semantic understanding or product completion from the implemen
 ## Local-first and privacy
 
 The Python intake reads only paths supplied by the operator and does not transmit data. Asset records avoid absolute source paths. FFprobe output is normalized and omits arbitrary metadata tags. Do not commit source media, transcripts, personal data, credentials, or local caches to this public repository.
+
+
+## RI-006 — Local modality processors and RI-007 foundation
+
+The local processing layer now includes optional adapters:
+
+| Processor | Local executable | Input | Output |
+|---|---|---|---|
+| OCR | Tesseract | JPEG/PNG | Text, word confidence, bounding boxes |
+| PDF text | Poppler pdftotext | PDF | UTF-8 page text with page boundaries |
+| ASR | whisper.cpp whisper-cli + supplied model | MP3/WAV or extracted WAV | Millisecond transcript segments |
+| Scene detection | FFmpeg | MP4 | Timestamp-only scene-change markers |
+
+No model or executable is downloaded automatically. No external model is mandatory. The processor adapters run locally, use argument-array subprocess calls with shell disabled, enforce timeouts and output limits, and normalize their results.
+
+### One-command analysis
+
+The new ri-analyze CLI chooses processors based on the input file type, builds canonical Evidence and Timeline records, validates cross-record references, and writes a new output directory.
+
+Image OCR:
+
+    ri-analyze slide.png --output ./runs/slide-001 --tesseract tesseract --ocr-languages eng+fas
+
+PDF text:
+
+    ri-analyze report.pdf --output ./runs/report-001 --pdftotext pdftotext
+
+Local ASR:
+
+    ri-analyze interview.wav --output ./runs/interview-001 --whisper-model ./models/ggml-tiny.bin --whisper-cli whisper-cli
+
+Video analysis with resource limits:
+
+    ri-analyze clip.mp4 --output ./runs/clip-001 --ffmpeg ffmpeg --ffprobe ffprobe --tesseract tesseract --whisper-model ./models/ggml-tiny.bin --whisper-cli whisper-cli --frame-interval 10 --max-frames 24 --max-duration 300
+
+Add --strict to fail the run instead of returning a partial manifest when an optional processor fails. Without strict mode, unavailable processors become explicit warnings and the manifest status is partial.
+
+### Analysis output
+
+A successful run creates:
+
+    runs/clip-001/
+    ├── analysis.json
+    └── derivatives/
+        ├── frames/
+        └── audio.wav
+
+The report includes the original Asset, Analysis Manifest, Evidence, Timeline Events, processor statuses, warnings, relative derivative paths, and an intentionally empty claims array. Evidence IDs are deterministic for the same asset, locator, processor and observation. Timeline events link to their evidence records. The engine does not fabricate semantic claims from text extraction.
+
+The output directory must not already exist. Existing data is never overwritten. Reports avoid absolute source paths; warnings redact known source and output paths.
+
+### Local bootstrap scripts
+
+From the repository root:
+
+    bash scripts/bootstrap-local.sh
+    bash scripts/check-local-tools.sh
+
+On Windows PowerShell:
+
+    .\scripts\bootstrap-local.ps1
+
+These scripts create a Python virtual environment, install the project and development tests, and report which optional local executables are available. They do not install external model weights or silently change system packages.
+
+### Explicit capability boundary
+
+The browser PWA still cannot launch native FFmpeg, Tesseract, Poppler, or whisper.cpp programs. Use the browser engine for local intake, hash and metadata inspection; use ri-analyze from a local terminal for modality processing and evidence/timeline generation. GitHub Actions checks and packages code only; it does not receive personal media.
+
+RI-007 here is the canonical evidence/timeline construction foundation, not a finished semantic reasoning product. Scanned-PDF rasterization, search/index, a human review interface, semantic claim generation, and device/runtime qualification remain future work.
