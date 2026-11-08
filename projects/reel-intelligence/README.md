@@ -156,6 +156,41 @@ python -m pytest -q
 
 GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 and verifies all four CLI entry points.
 
+## Browser Workbench (RI-WEB)
+
+A dependency-free, installable static web app is available in `web/`.
+
+### Open it
+
+- Open `web/index.html` from a local static HTTP server, or publish the folder with GitHub Pages.
+- For reliable PWA installation and offline caching, use an HTTPS origin (GitHub Pages provides HTTPS).
+- On first load, the service worker caches the app shell. Subsequent visits can open the workbench offline.
+- On Android, use the browser menu's **Add to Home screen** option after opening the HTTPS deployment.
+
+### Local Engine
+
+1. Switch **LOCAL ENGINE** on.
+2. Select or drop MP4, MP3, WAV, JPEG, PNG, or PDF files.
+3. The browser checks the extension and file signature, computes SHA-256, and reads browser-exposed media metadata (duration/dimensions where available).
+4. Export the result as a JSON report.
+
+The browser app does not upload media, call a remote API, or persist selected file bytes. Hashing currently uses the browser Web Crypto API and reads the selected file into memory; very large media files may exceed mobile-browser memory limits. Use smaller files on low-memory devices.
+
+The browser workbench is a local intake/inspection surface, not the full semantic engine. It does not yet perform ASR, OCR, scene understanding, frame extraction, or evidence/claim generation. Its browser-generated Asset record uses `source.kind=browser_local_file`; it is a browser report and is not silently inserted into the Python catalog.
+
+### GitHub Actions control
+
+The manual operator workflow is `.github/workflows/ri-workbench.yml`.
+
+- Open [RI Workbench Control](https://github.com/metsam-mastem/VINT/actions/workflows/ri-workbench.yml).
+- Select **Run workflow** and choose `self_check` or `validate_project`.
+- `self_check` runs tests, compilation, CLI checks, and verifies the web app files.
+- `validate_project` performs the same checks and packages the static web app as a downloadable workflow artifact (retained for 14 days).
+
+The workflow uses a temporary GitHub-hosted runner and read-only repository permissions. It does not accept or upload personal media. No GitHub token is embedded in the static app. The dashboard's Actions link intentionally hands control to GitHub's authenticated interface rather than storing credentials in the browser.
+
+To publish the web app with GitHub Pages, enable **Settings → Pages → Build and deployment → GitHub Actions** after the feature is merged to the default branch. The static site itself requires no always-on server or database.
+
 ## Not implemented yet
 
 - ZIP/archive inspection and safe extraction.
