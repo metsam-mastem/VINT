@@ -16,7 +16,7 @@ from .extraction import ExtractionError, extract_media
 from .intake import IntakeError, inspect_file
 from .processors import (
     ASRProcessor,
-    FFmpegSceneDetector,
+    SceneDetectionProcessor,
     OCRProcessor,
     PDFPageRenderer,
     PDFTextProcessor,
@@ -160,6 +160,13 @@ def run_local_analysis(
         source = Path(source_path).resolve(strict=True)
     except (IntakeError, OSError) as exc:
         raise PipelineError(f"cannot accept source media: {exc}") from exc
+
+    if isinstance(max_ocr_frames, bool) or not isinstance(max_ocr_frames, int) or not 1 <= max_ocr_frames <= 1000:
+        raise PipelineError("max_ocr_frames must be an integer between 1 and 1000")
+    if isinstance(max_pdf_pages, bool) or not isinstance(max_pdf_pages, int) or not 1 <= max_pdf_pages <= 1000:
+        raise PipelineError("max_pdf_pages must be an integer between 1 and 1000")
+    if not isinstance(enable_ocr, bool) or not isinstance(enable_scene_detection, bool) or not isinstance(fail_fast, bool):
+        raise PipelineError("enable_ocr, enable_scene_detection, and fail_fast must be booleans")
 
     destination = Path(output_dir)
     if destination.exists() or destination.is_symlink():
@@ -306,7 +313,7 @@ def run_local_analysis(
                 toolchain["ocr"] = "tesseract"
                 processor_status["ocr"] = "partial" if failures else "completed"
 
-        elif enable_ocr and media_type == "document" and asset["metadata"].get("detected_format") == "pdf":
+        elif media_type == "document" and asset["metadata"].get("detected_format") == "pdf":
             text_pages: list[dict[str, Any]] = []
             try:
                 text_result = PDFTextProcessor(
@@ -314,20 +321,27 @@ def run_local_analysis(
                     timeout_seconds=ocr_timeout_seconds,
                 ).process(source)
                 text_pages = text_result["pages"]
+                _atomic_write_json(destination / "pdf-text.json", text_result)
+                report_files.append("pdf-text.json")
                 for page in text_pages:
                     if page["text"].strip():
                         ocr_observations.append({
                             "page": page["page"],
                             "text": page["text"],
                             "extractor": "pdftotext",
+                            "event_type": "document_text",
                             "modality": "document",
                             "content_hash": asset["sha256"],
                         })
                 toolchain["pdf_text"] = text_result["processor"]
+                processor_status["pdf_text"] = "completed"
             except (ProcessorError, OSError) as exc:
-                warnings.append(f"PDF text layer: {_safe_error(exc, [source, destination])}")
+                if enable_ocr:
+                    warnings.append(f"PDF text layer: {_safe_error(exc, [source, destination])}")
+                else:
+                    record_warning("PDF text extraction", exc)
 
-            if not text_pages:
+            if enable_ocr and not text_pages:
                 try:
                     render = PDFPageRenderer(
                         pdftoppm_path=pdftoppm_path,
@@ -354,13 +368,21 @@ def run_local_analysis(
                             )
                             if observation:
                                 observation["page"] = page["page"]
+                                observation["event_type"] = "document_text_ocr"
                                 ocr_observations.append(observation)
                     toolchain["ocr"] = "tesseract"
                     processor_status["ocr"] = "completed"
                 except (ProcessorError, OSError) as exc:
                     record_warning("PDF OCR fallback", exc)
-            else:
+            elif enable_ocr:
                 processor_status["ocr"] = "completed"
+            else:
+                processor_status["ocr"] = "disabled"
+        elif enable_ocr:
+            processor_status["ocr"] = "not_applicable"
+        else:
+            processor_status["ocr"] = "disabled"
+
         elif enable_ocr:
             processor_status["ocr"] = "not_applicable"
         else:
@@ -368,7 +390,7 @@ def run_local_analysis(
 
         if enable_scene_detection and media_type == "video":
             try:
-                scene_result = FFmpegSceneDetector(
+                scene_result = SceneDetectionProcessor(
                     ffmpeg_path=ffmpeg_path,
                     threshold=scene_threshold,
                     max_duration_seconds=max_duration_seconds,
