@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }} / RI-001
+    name: Python ${{ matrix.python-version }} / REEL INTELLIGENCE
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -54,5 +54,7 @@ jobs:
       - name: Run acceptance tests
         run: python -m pytest -q
 
-      - name: Verify CLI entry point
-        run: ri-validate --help
+      - name: Verify CLI entry points
+        run: |
+          ri-validate --help
+          ri-intake --help
