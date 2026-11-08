@@ -145,3 +145,47 @@ def test_processors_reject_non_positive_timeout(tmp_path):
         OCRProcessor(timeout_seconds=0)
     with pytest.raises(ProcessorError, match="timeout"):
         PDFTextProcessor(timeout_seconds=0)
+
+
+def test_pdf_page_renderer_returns_hashed_relative_page_files(tmp_path):
+    from reel_intelligence.processors import PDFPageRenderer
+
+    pdf = make_pdf(tmp_path)
+    renderer_tool = executable(tmp_path, "pdftoppm", """#!/usr/bin/env python3
+import pathlib, sys
+prefix = pathlib.Path(sys.argv[-1])
+for page in (1, 2):
+    pathlib.Path(str(prefix) + f"-{page}.png").write_bytes(b"\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR")
+""")
+    output = tmp_path / "rendered"
+    result = PDFPageRenderer(pdftoppm_path=renderer_tool).process(pdf, output)
+
+    assert result["page_count"] == 2
+    assert result["pages"][0]["page"] == 1
+    assert result["pages"][0]["path"] == "page-1.png"
+    assert len(result["pages"][0]["sha256"]) == 64
+    assert str(tmp_path) not in json.dumps(result)
+
+
+def test_pdf_page_renderer_refuses_to_overwrite_existing_output(tmp_path):
+    from reel_intelligence.processors import PDFPageRenderer
+
+    pdf = make_pdf(tmp_path)
+    output = tmp_path / "rendered"
+    output.mkdir()
+    marker = output / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    with pytest.raises(ProcessorError, match="already exists"):
+        PDFPageRenderer(pdftoppm_path="pdftoppm").process(pdf, output)
+
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+def test_tesseract_output_is_bounded_before_reading_into_memory(tmp_path):
+    image = make_image(tmp_path)
+    tesseract = executable(tmp_path, "large-tesseract", """#!/usr/bin/env python3
+print("X" * 20000)
+""")
+    with pytest.raises(ProcessorError, match="output exceeds"):
+        OCRProcessor(tesseract_path=tesseract, max_text_chars=100).process(image)
