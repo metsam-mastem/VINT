@@ -96,7 +96,10 @@ The intake layer reads only the path supplied by the operator. It does not trans
 
 ## Current status
 
-- RI-001 validator: implementation and CI verification in progress on the feature branch.
-- RI-002 local file and directory intake: implemented; CI verification pending for latest commit.\n- RI-003 FFprobe metadata probe: implemented; CI verification pending for latest commit.
-- Media analysis pipeline: not implemented.
+- RI-001 canonical validator: implemented; 50 tests pass in the current CI matrix.
+- RI-002 local file and directory intake: implemented; supported formats and path-safety checks pass.
+- RI-003 FFprobe metadata probe: implemented; fake-executable integration tests pass.
+- Current CI matrix: PASS on Python 3.10, 3.12, and 3.13.
+- Device-level and native FFprobe integration benchmarks: NOT RUN.
+- Semantic media analysis pipeline: not implemented.
 - Main branch: unchanged by this feature work.
