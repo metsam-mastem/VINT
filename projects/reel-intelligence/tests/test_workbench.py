@@ -32,7 +32,8 @@ def test_workbench_has_safe_github_actions_handoff():
 
     assert "RI Workbench Control" in html
     assert "actions/workflows/ri-workbench.yml" in html
-    assert "Run workflow" in app or "GitHub Actions" in app
+    assert "actions/workflows/ri-workbench.yml" in html
+    assert "GitHub Actions" in html
 
 
 def test_operator_workflow_is_manual_and_read_only():
