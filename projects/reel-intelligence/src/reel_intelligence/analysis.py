@@ -248,11 +248,11 @@ def build_analysis_bundle(
         confidence = _confidence(item.get("confidence"), "OCR observation")
         extractor = str(item.get("extractor") or (toolchain or {}).get("ocr") or "ocr")
         add_observation(
-            modality="image" if "path" in item else "document",
+            modality=item.get("modality") or ("image" if "path" in item else "document"),
             locator=locator,
             observation=text,
             extractor=extractor,
-            event_type="ocr_text" if "path" in item else "document_text",
+            event_type=item.get("event_type") or ("ocr_text" if "path" in item else "document_text"),
             start_ms=timestamp_ms,
             end_ms=timestamp_ms,
             confidence=confidence,
@@ -275,9 +275,15 @@ def build_analysis_bundle(
             event_type="scene_boundary",
             start_ms=start_ms,
             end_ms=start_ms,
+            content_hash=(item.get("content_hash") if isinstance(item, dict) else None),
         )
 
-    status = "partial" if clean_warnings else "completed"
+    if clean_warnings and evidence_records:
+        status = "partial"
+    elif clean_warnings:
+        status = "failed"
+    else:
+        status = "completed"
 
     manifest_id = _stable_id(
         "manifest",
