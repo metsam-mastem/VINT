@@ -85,3 +85,112 @@ def test_analysis_partial_status_records_processor_warnings(tmp_path):
 
     assert manifest["status"] == "partial"
     assert manifest["warnings"] == ["OCR executable unavailable"]
+
+
+def make_png(tmp_path):
+    media = tmp_path / "sample.png"
+    media.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+    return media
+
+
+def make_pdf(tmp_path):
+    media = tmp_path / "sample.pdf"
+    media.write_bytes(b"%PDF-1.7\n%test")
+    return media
+
+
+def make_wav(tmp_path):
+    media = tmp_path / "sample.wav"
+    media.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+    return media
+
+
+def make_executable(tmp_path, name, source):
+    path = tmp_path / name
+    path.write_text(source, encoding="utf-8")
+    path.chmod(0o755)
+    return str(path)
+
+
+def test_analyze_media_writes_image_evidence_report_without_absolute_path(tmp_path):
+    from reel_intelligence.analysis import analyze_media
+
+    image = make_png(tmp_path)
+    tesseract = make_executable(tmp_path, "tesseract", """#!/usr/bin/env python3
+print("level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext")
+print("5\t1\t1\t1\t1\t1\t10\t20\t100\t25\t96\tLaunch")
+print("5\t1\t1\t1\t1\t2\t115\t20\t80\t25\t94\tchecklist")
+""")
+    output = tmp_path / "image-report"
+    report = analyze_media(image, output, tesseract_path=tesseract)
+
+    evidence = [item for item in report["records"] if item["record_type"] == "evidence"]
+    assert report["manifest"]["status"] == "completed"
+    assert len(evidence) == 1
+    assert evidence[0]["observation"] == "Launch checklist"
+    assert str(tmp_path) not in json.dumps(report, ensure_ascii=False)
+    assert (output / "analysis.json").is_file()
+    assert validate_bundle(report["records"]) == report["records"]
+
+
+def test_analyze_media_extracts_pdf_pages(tmp_path):
+    from reel_intelligence.analysis import analyze_media
+
+    pdf = make_pdf(tmp_path)
+    pdftotext = make_executable(tmp_path, "pdftotext", """#!/usr/bin/env python3
+print("Page one\\fPage two\\f")
+""")
+    report = analyze_media(pdf, tmp_path / "pdf-report", pdftotext_path=pdftotext)
+    evidence = [item for item in report["records"] if item["record_type"] == "evidence"]
+
+    assert [item["locator"] for item in evidence] == [{"page": 1}, {"page": 2}]
+    assert [item["observation"] for item in evidence] == ["Page one", "Page two"]
+
+
+def test_analyze_media_creates_asr_evidence_and_timeline(tmp_path):
+    from reel_intelligence.analysis import analyze_media
+
+    audio = make_wav(tmp_path)
+    model = tmp_path / "ggml-tiny.bin"
+    model.write_bytes(b"model-placeholder")
+    whisper = make_executable(tmp_path, "whisper-cli", """#!/usr/bin/env python3
+import json, pathlib, sys
+prefix = sys.argv[sys.argv.index("-of") + 1]
+pathlib.Path(prefix + ".json").write_text(json.dumps({"transcription":[
+  {"offsets":{"from":500,"to":1500},"text":"open the file"},
+  {"offsets":{"from":1500,"to":2500},"text":"inspect metadata"}
+]}), encoding="utf-8")
+""")
+    report = analyze_media(
+        audio, tmp_path / "audio-report",
+        whisper_model=model, whisper_path=whisper,
+    )
+    timeline = [item for item in report["records"] if item["record_type"] == "timeline_event"]
+    assert len(timeline) == 2
+    assert timeline[0]["start_ms"] == 500
+    assert timeline[1]["text"] == "inspect metadata"
+
+
+def test_analyze_media_records_partial_status_when_optional_backend_is_missing(tmp_path):
+    from reel_intelligence.analysis import analyze_media
+
+    report = analyze_media(
+        make_png(tmp_path), tmp_path / "partial-report",
+        tesseract_path=tmp_path / "missing-tesseract",
+    )
+    assert report["manifest"]["status"] == "partial"
+    assert report["manifest"]["warnings"]
+
+
+def test_analyze_media_never_overwrites_existing_output(tmp_path):
+    from reel_intelligence.analysis import analyze_media
+
+    output = tmp_path / "existing"
+    output.mkdir()
+    marker = output / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    with pytest.raises(AnalysisError, match="already exists"):
+        analyze_media(make_png(tmp_path), output)
+
+    assert marker.read_text(encoding="utf-8") == "keep"
