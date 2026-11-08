@@ -16,6 +16,7 @@ dev = ["pytest>=8"]
 ri-validate = "reel_intelligence.cli:main"
 ri-intake = "reel_intelligence.intake_cli:main"
 ri-probe = "reel_intelligence.probe_cli:main"
+ri-catalog = "reel_intelligence.catalog_cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
