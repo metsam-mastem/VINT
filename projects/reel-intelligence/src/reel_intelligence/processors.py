@@ -122,6 +122,7 @@ class OCRProcessor:
         result = _run(
             [executable, str(Path(path).resolve(strict=True)), "stdout", "-l", language_arg, "tsv"],
             timeout=self.timeout_seconds,
+            max_output_bytes=self.max_text_chars * 8 + 4096,
         )
         if len(result.stdout) > self.max_text_chars * 8 + 4096:
             raise ProcessorError("OCR TSV output exceeds the configured processing limit")
@@ -201,6 +202,7 @@ class PDFTextProcessor:
         result = _run(
             [executable, "-layout", "-enc", "UTF-8", str(Path(path).resolve(strict=True)), "-"],
             timeout=self.timeout_seconds,
+            max_output_bytes=self.max_text_chars + 4096,
         )
         if len(result.stdout) > self.max_text_chars:
             raise ProcessorError("PDF text exceeds the configured processing limit")
@@ -275,6 +277,7 @@ class ASRProcessor:
             _run(
                 [executable, "-m", str(model), "-f", str(Path(path).resolve(strict=True)), "-oj", "-of", str(prefix)],
                 timeout=self.timeout_seconds,
+                max_output_bytes=8 * 1024 * 1024,
             )
             json_path = prefix.with_suffix(".json")
             try:
@@ -370,6 +373,7 @@ class SceneDetectionProcessor:
                 "-an", "-f", "null", "-",
             ],
             timeout=self.timeout_seconds,
+            max_output_bytes=32 * 1024 * 1024,
         )
         matches = re.findall(r"pts_time:([0-9]+(?:\.[0-9]+)?)", result.stderr)
         timestamps = []
