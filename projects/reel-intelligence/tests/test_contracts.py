@@ -97,3 +97,92 @@ def test_bundle_accepts_linked_supported_claim():
         "created_at": "2026-11-08T07:00:00Z",
     }
     assert len(validate_bundle([a, e, c])) == 3
+
+
+@pytest.mark.parametrize("field,value", [
+    ("record_type", []),
+    ("media_type", []),
+])
+def test_rejects_unhashable_enum_values_with_contract_error(field, value):
+    item = asset()
+    item[field] = value
+    with pytest.raises(ContractError):
+        validate_record(item)
+
+
+@pytest.mark.parametrize("value", [None, 7, [], {}, True, "g" * 64])
+def test_rejects_non_string_or_invalid_evidence_content_hash(value):
+    evidence = {
+        "schema_version": "1.0", "record_type": "evidence",
+        "evidence_id": "e-1", "asset_id": "asset-001",
+        "modality": "video", "locator": {"start_ms": 0},
+        "observation": "Visible object",
+        "content_hash": value,
+        "created_at": "2026-11-08T07:00:00Z",
+    }
+    with pytest.raises(ContractError, match="content_hash"):
+        validate_record(evidence)
+
+
+def test_rejects_missing_related_claim_reference():
+    a = asset()
+    claim = {
+        "schema_version": "1.0", "record_type": "claim",
+        "claim_id": "claim-1", "statement": "Related claim exists",
+        "status": "uncertain", "evidence_ids": [],
+        "related_claim_ids": ["missing-claim"],
+        "created_at": "2026-11-08T07:00:00Z",
+    }
+    with pytest.raises(ContractError, match="related_claim_ids"):
+        validate_bundle([a, claim])
+
+
+@pytest.mark.parametrize("source", [
+    {"kind": []},
+    {"kind": "local_file", "unexpected": "value"},
+])
+def test_rejects_malformed_asset_source(source):
+    item = asset()
+    item["source"] = source
+    with pytest.raises(ContractError, match="source"):
+        validate_record(item)
+
+
+@pytest.mark.parametrize("locator", [
+    {"start_ms": "zero"},
+    {"start_ms": 5, "end_ms": 4},
+    {"start_ms": 0, "unexpected": True},
+    {"unexpected": True},
+])
+def test_rejects_malformed_evidence_locator(locator):
+    evidence = {
+        "schema_version": "1.0", "record_type": "evidence",
+        "evidence_id": "e-1", "asset_id": "asset-001",
+        "modality": "video", "locator": locator,
+        "observation": "Visible object",
+        "created_at": "2026-11-08T07:00:00Z",
+    }
+    with pytest.raises(ContractError, match="locator"):
+        validate_record(evidence)
+
+
+def test_rejects_timeline_evidence_from_different_asset():
+    a1 = asset()
+    a2 = asset()
+    a2["asset_id"] = "asset-002"
+    evidence = {
+        "schema_version": "1.0", "record_type": "evidence",
+        "evidence_id": "e-1", "asset_id": "asset-002",
+        "modality": "video", "locator": {"start_ms": 0},
+        "observation": "Evidence for second asset",
+        "created_at": "2026-11-08T07:00:00Z",
+    }
+    event = {
+        "schema_version": "1.0", "record_type": "timeline_event",
+        "event_id": "event-1", "asset_id": "asset-001",
+        "start_ms": 0, "end_ms": 10, "event_type": "observation",
+        "evidence_ids": ["e-1"],
+        "created_at": "2026-11-08T07:00:00Z",
+    }
+    with pytest.raises(ContractError, match="asset"):
+        validate_bundle([a1, a2, evidence, event])
