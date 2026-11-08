@@ -24,6 +24,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ocr-languages", default="eng", help="Tesseract language set, e.g. eng+fas")
     parser.add_argument("--no-scenes", action="store_true", help="Disable video scene-change detection")
     parser.add_argument("--no-video-extraction", action="store_true", help="Disable frame/audio extraction for video")
+    parser.add_argument("--frame-interval", type=float, default=5.0, help="Video frame sampling interval in seconds")
+    parser.add_argument("--max-frames", type=int, default=120, help="Hard cap on sampled video frames")
+    parser.add_argument("--max-duration", type=float, default=3600.0, help="Maximum video duration processed in seconds")
     parser.add_argument("--strict", action="store_true", help="Fail instead of returning partial results when an optional processor fails")
     args = parser.parse_args(argv)
 
@@ -40,6 +43,9 @@ def main(argv: list[str] | None = None) -> int:
             ocr_languages=args.ocr_languages,
             enable_scenes=not args.no_scenes,
             enable_video_extraction=not args.no_video_extraction,
+            frame_interval_seconds=args.frame_interval,
+            max_frames=args.max_frames,
+            max_duration_seconds=args.max_duration,
             strict=args.strict,
         )
     except (AnalysisError, OSError) as exc:
