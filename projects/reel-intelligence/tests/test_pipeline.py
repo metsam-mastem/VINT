@@ -108,7 +108,10 @@ pathlib.Path(prefix + ".json").write_text(json.dumps({"transcription":[
     assert result["manifest"]["status"] == "completed"
     assert (output / "derived" / "audio.wav").is_file()
     assert (output / "extraction.json").is_file()
-    assert (output / "analysis.json").is_file()\n    analysis = json.loads((output / "analysis.json").read_text(encoding="utf-8"))\n    assert any(item.get("kind") == "video_frame" for item in analysis["artifacts"])\n    assert any(item.get("event_type") == "scene_boundary" for item in analysis["records"])
+    assert (output / "analysis.json").is_file()
+    analysis = json.loads((output / "analysis.json").read_text(encoding="utf-8"))
+    assert any(item.get("kind") == "video_frame" for item in analysis["artifacts"])
+    assert any(item.get("event_type") == "scene_boundary" for item in analysis["records"])
 
 
 def test_pdf_pipeline_falls_back_to_page_rendering_and_ocr(tmp_path):
