@@ -49,6 +49,7 @@ def test_operator_workflow_is_manual_and_read_only():
     assert "permissions:" in workflow
     assert "pytest" in workflow
     assert "upload-artifact" in workflow
+    assert "path: projects/reel-intelligence/web/" in workflow
     assert "node --test" in workflow
 
 
@@ -72,4 +73,5 @@ def test_ci_packages_the_static_workbench_artifact():
     assert "package-workbench:" in workflow
     assert "actions/upload-artifact@v4" in workflow
     assert "reel-intelligence-workbench" in workflow
+    assert "path: projects/reel-intelligence/web/" in workflow
     assert "node --test" in workflow
