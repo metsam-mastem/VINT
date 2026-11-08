@@ -1,7 +1,7 @@
 import pytest
 
 from reel_intelligence.contracts import validate_record
-from reel_intelligence.intake import IntakeError, inspect_file
+from reel_intelligence.intake import IntakeError, inspect_directory, inspect_file
 
 
 SAMPLES = [
@@ -82,3 +82,45 @@ def test_enforces_root_boundary(tmp_path):
     outside.write_bytes(SAMPLES[4][1])
     with pytest.raises(IntakeError, match="outside"):
         inspect_file(outside, root=root)
+
+
+def test_intakes_directory_recursively_and_deduplicates_content(tmp_path):
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (tmp_path / "a.mp3").write_bytes(SAMPLES[1][1])
+    (nested / "b.png").write_bytes(SAMPLES[4][1])
+    (nested / "duplicate.mp3").write_bytes(SAMPLES[1][1])
+    (tmp_path / "notes.txt").write_text("not an intake format", encoding="utf-8")
+
+    assets = inspect_directory(tmp_path)
+
+    assert [item["filename"] for item in assets] == ["a.mp3", "b.png"]
+    assert len({item["asset_id"] for item in assets}) == 2
+
+
+def test_directory_intake_can_disable_recursion(tmp_path):
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (tmp_path / "top.png").write_bytes(SAMPLES[4][1])
+    (nested / "nested.png").write_bytes(SAMPLES[4][1])
+
+    assets = inspect_directory(tmp_path, recursive=False)
+
+    assert [item["filename"] for item in assets] == ["top.png"]
+
+
+def test_directory_intake_fails_closed_on_symlinks(tmp_path):
+    external = tmp_path.parent / "external.png"
+    external.write_bytes(SAMPLES[4][1])
+    (tmp_path / "linked.png").symlink_to(external)
+
+    with pytest.raises(IntakeError, match="symbolic link"):
+        inspect_directory(tmp_path)
+
+
+def test_directory_intake_rejects_non_directory(tmp_path):
+    file_path = tmp_path / "sample.png"
+    file_path.write_bytes(SAMPLES[4][1])
+
+    with pytest.raises(IntakeError, match="directory"):
+        inspect_directory(file_path)
