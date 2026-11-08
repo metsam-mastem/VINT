@@ -63,6 +63,7 @@ jobs:
           ri-probe --help
           ri-catalog --help
           ri-extract --help
+          ri-analyze --help
 
       - name: Verify static workbench
         working-directory: .
