@@ -331,6 +331,9 @@ def analyze_media(
     ocr_languages: str = "eng",
     enable_scenes: bool = True,
     enable_video_extraction: bool = True,
+    frame_interval_seconds: float = 5.0,
+    max_frames: int = 120,
+    max_duration_seconds: float = 3600.0,
     strict: bool = False,
 ) -> dict[str, Any]:
     """Run installed local processors and persist a validated analysis report.
@@ -370,13 +373,24 @@ def analyze_media(
             raise AnalysisError(message)
         warnings.append(message)
 
+    def redact(value: str) -> str:
+        sensitive_paths = [source, destination]
+        for candidate in sensitive_paths:
+            try:
+                absolute = str(candidate.resolve(strict=False))
+                if absolute:
+                    value = value.replace(absolute, candidate.name or "<local-path>")
+            except OSError:
+                continue
+        return value
+
     def attempt(name: str, operation):
         try:
             result = operation()
             processor_results.append({"processor": name, "status": "completed"})
             return result
         except (ProcessorError, ExtractionError, OSError) as exc:
-            message = f"{name} skipped or failed: {exc}"
+            message = redact(f"{name} skipped or failed: {exc}")
             if strict:
                 raise AnalysisError(message) from exc
             warnings.append(message)
@@ -452,9 +466,9 @@ def analyze_media(
                             destination / "derivatives",
                             ffmpeg_path=ffmpeg_path,
                             ffprobe_path=ffprobe_path,
-                            interval_seconds=5.0,
-                            max_frames=120,
-                            max_duration_seconds=3600.0,
+                            interval_seconds=frame_interval_seconds,
+                            max_frames=max_frames,
+                            max_duration_seconds=max_duration_seconds,
                         ),
                     )
                     if extraction_result is not None:
