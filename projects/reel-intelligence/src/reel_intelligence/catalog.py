@@ -57,6 +57,7 @@ class AssetCatalog:
                     CREATE TABLE IF NOT EXISTS assets (
                         asset_id TEXT PRIMARY KEY,
                         sha256 TEXT NOT NULL UNIQUE,
+                        media_type TEXT NOT NULL,
                         asset_json TEXT NOT NULL,
                         probe_json TEXT,
                         first_seen_at TEXT NOT NULL,
@@ -92,16 +93,19 @@ class AssetCatalog:
             now = self._now()
             with self._connect() as connection:
                 existing = connection.execute(
-                    "SELECT sha256 FROM assets WHERE asset_id = ?", (validated["asset_id"],)
+                    "SELECT sha256, media_type FROM assets WHERE asset_id = ?", (validated["asset_id"],)
                 ).fetchone()
-                if existing is not None and existing["sha256"] != validated["sha256"]:
-                    raise CatalogError("asset ID is already associated with a different content hash")
+                if existing is not None and (
+                    existing["sha256"] != validated["sha256"]
+                    or existing["media_type"] != validated["media_type"]
+                ):
+                    raise CatalogError("asset ID is already associated with different content metadata")
                 if existing is None:
                     connection.execute(
                         """INSERT INTO assets
-                           (asset_id, sha256, asset_json, probe_json, first_seen_at, last_seen_at)
-                           VALUES (?, ?, ?, ?, ?, ?)""",
-                        (validated["asset_id"], validated["sha256"], asset_json, probe_json, now, now),
+                           (asset_id, sha256, media_type, asset_json, probe_json, first_seen_at, last_seen_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (validated["asset_id"], validated["sha256"], validated["media_type"], asset_json, probe_json, now, now),
                     )
                     return True
                 connection.execute(
@@ -158,9 +162,10 @@ class AssetCatalog:
             raise CatalogError("limit must be an integer between 1 and 1000")
         if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
             raise CatalogError("offset must be a non-negative integer")
-        if media_type is not None and media_type not in {
-            "video", "audio", "image", "document", "text", "archive", "other"
-        }:
+        if media_type is not None and (
+            not isinstance(media_type, str)
+            or media_type not in {"video", "audio", "image", "document", "text", "archive", "other"}
+        ):
             raise CatalogError("unsupported media_type filter")
         try:
             with self._connect() as connection:
@@ -173,7 +178,7 @@ class AssetCatalog:
                 else:
                     rows = connection.execute(
                         """SELECT asset_json, probe_json, first_seen_at, last_seen_at
-                           FROM assets WHERE json_extract(asset_json, '$.media_type') = ?
+                           FROM assets WHERE media_type = ?
                            ORDER BY last_seen_at DESC, asset_id ASC LIMIT ? OFFSET ?""",
                         (media_type, limit, offset),
                     ).fetchall()
